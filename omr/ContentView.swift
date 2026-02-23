@@ -8,17 +8,24 @@
 import SwiftUI
 
 struct ContentView: View {
+    @EnvironmentObject var appState: AppState
+    
     var body: some View {
-        VStack {
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-            Text("Hello, Santiago!")
+        Group {
+            switch appState.currentScreen {
+            case .home:
+                HomeView()
+            case .recording:
+                RecordingView()
+            case .summary:
+                SummaryView()
+            }
         }
-        .padding()
+        .animation(.default, value: appState.currentScreen)
     }
 }
 
 #Preview {
     ContentView()
+        .environmentObject(AppState())
 }
