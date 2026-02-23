@@ -15,7 +15,7 @@ struct SessionStats {
 
 class AppState: ObservableObject {
     @Published var currentScreen: AppScreen = .home
-    @Published var lastSession: SessionStats = SessionStats(reps: 0, duration: 0, streak: 85)
+    @Published var lastSession: SessionStats = SessionStats(reps: 0, duration: 0, streak: 0)
     
     // Mocked action to start training
     func startTraining() {

@@ -3,21 +3,22 @@ import Combine
 
 struct RecordingView: View {
     @EnvironmentObject var appState: AppState
+    @StateObject private var cameraManager = CameraManager()
     @State private var mockReps: Int = 13
-    @State private var isPaused: Bool = false
-    @State private var timerActive: Bool = true
-    @State private var timeElapsed: TimeInterval = 125 // 2:05
+    @State private var timeElapsed: TimeInterval = 0
     
     let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     
     var body: some View {
         ZStack {
-            // Viewfinder Placeholder (Front Camera Mirror)
-            Color.black
+            // Real Camera Feed
+            CameraPreview(session: cameraManager.session)
                 .ignoresSafeArea()
             
-            // Subtle "Camera Feed" simulated gradient
-            LinearGradient(colors: [.black.opacity(0.3), .clear], startPoint: .top, endPoint: .bottom)
+            // Subtle "Camera Feed" simulated gradient per design context
+            LinearGradient(colors: [.black.opacity(0.3), .clear, .black.opacity(0.3)], 
+                           startPoint: .top, 
+                           endPoint: .bottom)
                 .ignoresSafeArea()
             
             VStack {
@@ -55,8 +56,16 @@ struct RecordingView: View {
                 HStack(spacing: 60) {
                     // Pause/Resume (Open Palm)
                     VStack(spacing: 12) {
-                        Button(action: { isPaused.toggle() }) {
-                            Image(systemName: isPaused ? "play.fill" : "pause.fill")
+                        Button(action: { 
+                            if cameraManager.status == .recording {
+                                cameraManager.pauseRecording()
+                            } else if cameraManager.status == .paused {
+                                cameraManager.resumeRecording()
+                            } else {
+                                cameraManager.startRecording()
+                            }
+                        }) {
+                            Image(systemName: cameraManager.status == .paused ? "play.fill" : "pause.fill")
                                 .font(.title)
                                 .foregroundStyle(.white)
                                 .frame(width: 80, height: 80)
@@ -76,7 +85,9 @@ struct RecordingView: View {
                     // Stop/Finish (Peace Sign)
                     VStack(spacing: 12) {
                         Button(action: {
-                            appState.endTraining(reps: mockReps, duration: timeElapsed)
+                            cameraManager.stopRecording { url in
+                                appState.endTraining(reps: mockReps, duration: timeElapsed)
+                            }
                         }) {
                             Image(systemName: "stop.fill")
                                 .font(.title)
@@ -87,7 +98,7 @@ struct RecordingView: View {
                         }
                         
                         HStack(spacing: 4) {
-                            Image(systemName: "hand.point.up.left.fill") // Placeholder for peace sign
+                            Image(systemName: "hand.point.up.left.fill")
                             Text("PEACE SIGN")
                         }
                         .font(.caption2)
@@ -97,11 +108,27 @@ struct RecordingView: View {
                 }
                 .padding(.bottom, 60)
             }
+            
+            // Camera Status Overlay (Error handling)
+            if case .error(let message) = cameraManager.status {
+                VStack {
+                    Text("Error")
+                        .font(.headline)
+                    Text(message)
+                        .font(.caption)
+                }
+                .padding()
+                .background(.ultraThinMaterial)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+            }
         }
         .onReceive(timer) { _ in
-            if !isPaused {
+            if cameraManager.status == .recording {
                 timeElapsed += 1
             }
+        }
+        .onAppear {
+            cameraManager.startRecording()
         }
         .statusBarHidden()
     }
