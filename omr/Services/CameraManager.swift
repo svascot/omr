@@ -203,9 +203,9 @@ extension CameraManager: AVCaptureVideoDataOutputSampleBufferDelegate {
         // If we have a time offset, apply it
         if timeOffset.value > 0 {
             var count: CMItemCount = 0
-            CMSampleBufferGetSampleTimingInfoArray(sampleBuffer, entryCount: 0, timingInfoArrayOut: nil, timingInfoCountOut: &count)
+            CMSampleBufferGetSampleTimingInfoArray(sampleBuffer, entryCount: 0, arrayToFill: nil, entriesNeededOut: &count)
             var info = [CMSampleTimingInfo](repeating: CMSampleTimingInfo(duration: .zero, presentationTimeStamp: .zero, decodeTimeStamp: .zero), count: count)
-            CMSampleBufferGetSampleTimingInfoArray(sampleBuffer, entryCount: count, timingInfoArrayOut: &info, timingInfoCountOut: &count)
+            CMSampleBufferGetSampleTimingInfoArray(sampleBuffer, entryCount: count, arrayToFill: &info, entriesNeededOut: &count)
             
             for i in 0..<count {
                 info[i].presentationTimeStamp = CMTimeSubtract(info[i].presentationTimeStamp, timeOffset)
