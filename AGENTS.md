@@ -67,3 +67,14 @@ This file serves as the primary context for AI agents working on the OMR project
 * **Hardware:** Front Camera (Mirror effect).
 * **Frameworks:** SwiftUI, Apple Vision Framework (`VNHumanBodyPoseRequest` & `VNHumanHandPoseRequest`), AVFoundation.
 
+---
+
+## 6. Current Progress
+
+* [x] Project Structure Initialized.
+* [x] Home Screen implemented.
+* [x] Mocked Navigation Flow (Home -> Recording -> Summary) implemented.
+* [x] Service Stubs created (`CameraManager`, `MovementService`).
+* [x] Implementation of `AVFoundation` video stitching (The Stitcher).
+* [ ] Implementation of `Vision` rep counting logic (Relaxed Mode).
+
