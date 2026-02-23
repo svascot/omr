@@ -33,8 +33,8 @@ To empower fitness enthusiasts and beginners to participate in progressive volum
 ## 📈 Roadmap & Current Progress
 
 ### Current Status
-- [x] Tech stack and design architecture finalized.
-- [x] Workflow and interface mockups defined.
+- [] Tech stack and design architecture finalized.
+- [] Workflow and interface mockups defined.
 - [ ] Implementing `CameraManager.swift` and `MovementService.swift`.
 
 ### Phase 2 Goals
