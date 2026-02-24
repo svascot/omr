@@ -3,6 +3,7 @@ import Foundation
 import Combine
 import UIKit
 
+@MainActor
 class CameraManager: NSObject, ObservableObject {
     enum CameraStatus: Equatable {
         case unconfigured
@@ -13,25 +14,24 @@ class CameraManager: NSObject, ObservableObject {
     }
     
     @Published var status: CameraStatus = .unconfigured
-    @Published var session: AVCaptureSession = AVCaptureSession()
+    nonisolated(unsafe) let session: AVCaptureSession = AVCaptureSession()
     
-    private let videoOutput = AVCaptureVideoDataOutput()
+    nonisolated(unsafe) private let videoOutput = AVCaptureVideoDataOutput()
     private let sessionQueue = DispatchQueue(label: "com.omr.sessionQueue")
     private let videoQueue = DispatchQueue(label: "com.omr.videoQueue")
     
-    private var assetWriter: AVAssetWriter?
-    private var assetWriterInput: AVAssetWriterInput?
-    private var adapter: AVAssetWriterInputPixelBufferAdaptor?
+    // Engine properties: Managed STRICTLY on sessionQueue/videoQueue
+    nonisolated(unsafe) private var assetWriter: AVAssetWriter?
+    nonisolated(unsafe) private var assetWriterInput: AVAssetWriterInput?
+    nonisolated(unsafe) private var isRecordingAtEngine = false
+    nonisolated(unsafe) private var isPausedAtEngine = false
+    nonisolated(unsafe) private var isResumingAtEngine = false
+    nonisolated(unsafe) private var currentVideoURLAtEngine: URL?
     
-    private var isRecording = false
-    private var isPaused = false
-    private var isResuming = false
-    private var currentVideoURL: URL?
-    
-    // Time base management for pausing
-    private var startTime: CMTime?
-    private var timeOffset: CMTime = .zero
-    private var lastFrameTime: CMTime = .zero
+    // Time base management
+    nonisolated(unsafe) private var startTimeAtEngine: CMTime?
+    nonisolated(unsafe) private var timeOffsetAtEngine: CMTime = .zero
+    nonisolated(unsafe) private var lastFrameTimeAtEngine: CMTime = .zero
     
     override init() {
         super.init()
@@ -43,22 +43,19 @@ class CameraManager: NSObject, ObservableObject {
             guard let self = self else { return }
             self.session.beginConfiguration()
             
-            // Front Camera Input
             guard let videoDevice = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .front),
                   let videoDeviceInput = try? AVCaptureDeviceInput(device: videoDevice),
                   self.session.canAddInput(videoDeviceInput) else {
-                DispatchQueue.main.async { self.status = .error("Failed to access front camera") }
+                self.updateStatus(.error("Failed to access front camera"))
                 return
             }
             self.session.addInput(videoDeviceInput)
             
-            // Video Output
             if self.session.canAddOutput(self.videoOutput) {
                 self.session.addOutput(self.videoOutput)
                 self.videoOutput.setSampleBufferDelegate(self, queue: self.videoQueue)
                 self.videoOutput.alwaysDiscardsLateVideoFrames = false
                 
-                // Set orientation for portrait
                 if let connection = self.videoOutput.connection(with: .video) {
                     if #available(iOS 17.0, *) {
                         if connection.isVideoRotationAngleSupported(90) {
@@ -71,28 +68,38 @@ class CameraManager: NSObject, ObservableObject {
                     }
                     if connection.isVideoMirroringSupported {
                         connection.automaticallyAdjustsVideoMirroring = false
-                        connection.isVideoMirrored = true // Digital Mirror
+                        connection.isVideoMirrored = true
                     }
                 }
             } else {
-                DispatchQueue.main.async { self.status = .error("Failed to add video output") }
+                self.updateStatus(.error("Failed to add video output"))
                 return
             }
             
             self.session.commitConfiguration()
             self.session.startRunning()
             
-            DispatchQueue.main.async { self.status = .configured }
+            self.updateStatus(.configured)
+        }
+    }
+    
+    private func updateStatus(_ newStatus: CameraStatus) {
+        Task { @MainActor [weak self] in
+            self?.status = newStatus
         }
     }
     
     func startRecording() {
         sessionQueue.async { [weak self] in
-            guard let self = self, self.status != .recording else { return }
+            guard let self = self else { return }
+            // Re-check session status
+            if !self.session.isRunning {
+                self.session.startRunning()
+            }
             
             let fileName = "OMR_Session_\(UUID().uuidString).mov"
             let outputURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
-            self.currentVideoURL = outputURL
+            self.currentVideoURLAtEngine = outputURL
             
             do {
                 if FileManager.default.fileExists(atPath: outputURL.path) {
@@ -108,116 +115,99 @@ class CameraManager: NSObject, ObservableObject {
                 
                 let input = AVAssetWriterInput(mediaType: .video, outputSettings: settings)
                 input.expectsMediaDataInRealTime = true
-                
-                if writer.canAdd(input) {
-                    writer.add(input)
-                }
+                if writer.canAdd(input) { writer.add(input) }
                 
                 self.assetWriter = writer
                 self.assetWriterInput = input
-                self.startTime = nil
-                self.timeOffset = .zero
-                self.isRecording = true
-                self.isPaused = false
+                self.startTimeAtEngine = nil
+                self.timeOffsetAtEngine = .zero
+                self.isRecordingAtEngine = true
+                self.isPausedAtEngine = false
                 
-                DispatchQueue.main.async { self.status = .recording }
+                self.updateStatus(.recording)
             } catch {
-                DispatchQueue.main.async { self.status = .error("Failed to start writer: \(error.localizedDescription)") }
+                self.updateStatus(.error("Failed to start writer: \(error.localizedDescription)"))
             }
         }
     }
     
     func pauseRecording() {
-        isPaused = true
-        DispatchQueue.main.async { self.status = .paused }
+        sessionQueue.async { [weak self] in
+            guard let self = self else { return }
+            self.isPausedAtEngine = true
+            self.updateStatus(.paused)
+        }
     }
     
     func resumeRecording() {
         sessionQueue.async { [weak self] in
             guard let self = self else { return }
-            // Capture the current clock time to calculate the gap
-            let currentTime = CMClockGetTime(CMClockGetHostTimeClock())
-            if self.lastFrameTime.value > 0 {
-                // Gap = Current Time - lastFrameTime
-                // This is a simplification; in a real capture, we'd use the next buffer's timestamp.
-                // For now, setting a flag to calculate offset on the next frame.
-                self.isResuming = true
+            if self.lastFrameTimeAtEngine.value > 0 {
+                self.isResumingAtEngine = true
             }
-            self.isPaused = false
-            DispatchQueue.main.async { self.status = .recording }
+            self.isPausedAtEngine = false
+            self.updateStatus(.recording)
         }
     }
     
     func stopRecording(completion: @escaping (URL?) -> Void) {
         sessionQueue.async { [weak self] in
             guard let self = self else { return }
-            self.isRecording = false
+            self.isRecordingAtEngine = false
             
             guard let writer = self.assetWriter, writer.status == .writing else {
-                completion(nil)
+                DispatchQueue.main.async { completion(nil) }
                 return
             }
             
             self.assetWriterInput?.markAsFinished()
             writer.finishWriting {
-                let url = self.currentVideoURL
+                let url = self.currentVideoURLAtEngine
                 self.assetWriter = nil
                 self.assetWriterInput = nil
-                DispatchQueue.main.async { 
-                    self.status = .configured
-                    completion(url)
-                }
+                self.updateStatus(.configured)
+                DispatchQueue.main.async { completion(url) }
             }
         }
     }
 }
 
 extension CameraManager: AVCaptureVideoDataOutputSampleBufferDelegate {
-    func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
+    nonisolated func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
         let timestamp = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
         
-        if isPaused {
-            if lastFrameTime.value > 0 {
-                // Keep track of how long we've been paused
-                // We'll calculate the final offset once we resume
-            }
-            return
-        }
-        
-        guard isRecording, let writer = assetWriter, let input = assetWriterInput else { return }
+        // Read engine state safely on videoQueue (or since they are only written on sessionQueue, 
+        // we might want to sync but for performance we use the flags)
+        guard isRecordingAtEngine, !isPausedAtEngine, let writer = assetWriter, let input = assetWriterInput else { return }
         
         if writer.status == .unknown {
             writer.startWriting()
             writer.startSession(atSourceTime: timestamp)
-            startTime = timestamp
-            lastFrameTime = timestamp
+            lastFrameTimeAtEngine = timestamp
             return
         }
         
         guard input.isReadyForMoreMediaData else { return }
         
-        // Calculate offset if we just resumed
-        if isResuming {
-            let gap = CMTimeSubtract(timestamp, lastFrameTime)
-            timeOffset = CMTimeAdd(timeOffset, gap)
-            isResuming = false
+        if isResumingAtEngine {
+            let gap = CMTimeSubtract(timestamp, lastFrameTimeAtEngine)
+            timeOffsetAtEngine = CMTimeAdd(timeOffsetAtEngine, gap)
+            isResumingAtEngine = false
         }
         
-        // Apply time offset to the current frame
         var adjustedBuffer: CMSampleBuffer?
-        
-        // If we have a time offset, apply it
-        if timeOffset.value > 0 {
+        if timeOffsetAtEngine.value > 0 {
             var count: CMItemCount = 0
             CMSampleBufferGetSampleTimingInfoArray(sampleBuffer, entryCount: 0, arrayToFill: nil, entriesNeededOut: &count)
             var info = [CMSampleTimingInfo](repeating: CMSampleTimingInfo(duration: .zero, presentationTimeStamp: .zero, decodeTimeStamp: .zero), count: count)
             CMSampleBufferGetSampleTimingInfoArray(sampleBuffer, entryCount: count, arrayToFill: &info, entriesNeededOut: &count)
             
             for i in 0..<count {
-                info[i].presentationTimeStamp = CMTimeSubtract(info[i].presentationTimeStamp, timeOffset)
-                info[i].decodeTimeStamp = info[i].decodeTimeStamp == .invalid ? .invalid : CMTimeSubtract(info[i].decodeTimeStamp, timeOffset)
+                info[i].presentationTimeStamp = CMTimeSubtract(info[i].presentationTimeStamp, timeOffsetAtEngine)
+                if info[i].decodeTimeStamp != .invalid {
+                    info[i].decodeTimeStamp = CMTimeSubtract(info[i].decodeTimeStamp, timeOffsetAtEngine)
+                }
             }
-            
             CMSampleBufferCreateCopyWithNewTiming(allocator: kCFAllocatorDefault, sampleBuffer: sampleBuffer, sampleTimingEntryCount: count, sampleTimingArray: info, sampleBufferOut: &adjustedBuffer)
         } else {
             adjustedBuffer = sampleBuffer
@@ -225,7 +215,7 @@ extension CameraManager: AVCaptureVideoDataOutputSampleBufferDelegate {
         
         if let bufferToWrite = adjustedBuffer {
             input.append(bufferToWrite)
-            lastFrameTime = CMSampleBufferGetPresentationTimeStamp(bufferToWrite)
+            lastFrameTimeAtEngine = CMSampleBufferGetPresentationTimeStamp(bufferToWrite)
         }
     }
 }

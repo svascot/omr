@@ -4,7 +4,7 @@ import Combine
 struct RecordingView: View {
     @EnvironmentObject var appState: AppState
     @StateObject private var cameraManager = CameraManager()
-    @State private var mockReps: Int = 13
+    @State private var mockReps: Int = 0
     @State private var timeElapsed: TimeInterval = 0
     
     let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()

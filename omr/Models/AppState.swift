@@ -7,7 +7,7 @@ enum AppScreen {
     case summary
 }
 
-struct SessionStats {
+struct SessionStats: Codable {
     var reps: Int
     var duration: TimeInterval
     var streak: Int
@@ -17,24 +17,53 @@ class AppState: ObservableObject {
     @Published var currentScreen: AppScreen = .home
     @Published var lastSession: SessionStats = SessionStats(reps: 0, duration: 0, streak: 0)
     
-    // Mocked action to start training
+    private let storageURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("user_data.json")
+    
+    init() {
+        loadData()
+    }
+    
+    // Action to start training
     func startTraining() {
         currentScreen = .recording
     }
     
-    // Mocked action to end training
+    // Action to end training
     func endTraining(reps: Int, duration: TimeInterval) {
-        lastSession = SessionStats(reps: reps, duration: duration, streak: lastSession.streak + 1)
+        // Simple streak logic: only increment if they actually did reps
+        let newStreak = reps > 0 ? lastSession.streak + 1 : lastSession.streak
+        lastSession = SessionStats(reps: reps, duration: duration, streak: newStreak)
         currentScreen = .summary
+        saveData()
     }
     
-    // Mocked action to save and return home
+    // Action to save and return home
     func saveAndReturnHome() {
         currentScreen = .home
+        saveData()
     }
     
-    // Mocked action to discard and return home
+    // Action to discard and return home
     func discardAndReturnHome() {
         currentScreen = .home
+    }
+    
+    private func saveData() {
+        do {
+            let data = try JSONEncoder().encode(lastSession)
+            try data.write(to: storageURL)
+        } catch {
+            print("Failed to save data: \(error)")
+        }
+    }
+    
+    private func loadData() {
+        guard FileManager.default.fileExists(atPath: storageURL.path) else { return }
+        do {
+            let data = try Data(contentsOf: storageURL)
+            lastSession = try JSONDecoder().decode(SessionStats.self, from: data)
+        } catch {
+            print("Failed to load data: \(error)")
+        }
     }
 }
