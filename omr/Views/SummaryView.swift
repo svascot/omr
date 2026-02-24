@@ -29,6 +29,7 @@ struct SummaryView: View {
             // Footer Actions
             VStack(spacing: 16) {
                 Button(action: {
+                    appState.saveVideoToLibrary()
                     appState.saveAndReturnHome()
                 }) {
                     Text("Save Session")

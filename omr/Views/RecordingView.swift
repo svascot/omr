@@ -86,7 +86,7 @@ struct RecordingView: View {
                     VStack(spacing: 12) {
                         Button(action: {
                             cameraManager.stopRecording { url in
-                                appState.endTraining(reps: mockReps, duration: timeElapsed)
+                                appState.endTraining(reps: mockReps, duration: timeElapsed, videoURL: url)
                             }
                         }) {
                             Image(systemName: "stop.fill")

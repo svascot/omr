@@ -1,5 +1,6 @@
 import SwiftUI
 import Combine
+import Photos
 
 enum AppScreen {
     case home
@@ -16,6 +17,7 @@ struct SessionStats: Codable {
 class AppState: ObservableObject {
     @Published var currentScreen: AppScreen = .home
     @Published var lastSession: SessionStats = SessionStats(reps: 0, duration: 0, streak: 0)
+    @Published var lastVideoURL: URL?
     
     private let storageURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("user_data.json")
     
@@ -29,12 +31,32 @@ class AppState: ObservableObject {
     }
     
     // Action to end training
-    func endTraining(reps: Int, duration: TimeInterval) {
+    func endTraining(reps: Int, duration: TimeInterval, videoURL: URL?) {
         // Simple streak logic: only increment if they actually did reps
         let newStreak = reps > 0 ? lastSession.streak + 1 : lastSession.streak
         lastSession = SessionStats(reps: reps, duration: duration, streak: newStreak)
+        lastVideoURL = videoURL
         currentScreen = .summary
         saveData()
+    }
+    
+    // Action to save video to library
+    func saveVideoToLibrary() {
+        guard let url = lastVideoURL else { return }
+        
+        PHPhotoLibrary.requestAuthorization { status in
+            if status == .authorized {
+                PHPhotoLibrary.shared().performChanges({
+                    PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: url)
+                }) { success, error in
+                    if success {
+                        print("Video saved successfully!")
+                    } else {
+                        print("Error saving video: \(error?.localizedDescription ?? "unknown error")")
+                    }
+                }
+            }
+        }
     }
     
     // Action to save and return home
