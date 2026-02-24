@@ -257,6 +257,7 @@
 				INFOPLIST_KEY_NSCameraUsageDescription = "OMR needs camera access to count your reps and record your session for social proof.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "OMR needs microphone access to capture audio for your training videos.";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "OMR needs permission to save your training sessions to your photo library.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "OMR needs permission to access your photo library to save and manage training sessions.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -292,6 +293,7 @@
 				INFOPLIST_KEY_NSCameraUsageDescription = "OMR needs camera access to count your reps and record your session for social proof.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "OMR needs microphone access to capture audio for your training videos.";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "OMR needs permission to save your training sessions to your photo library.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "OMR needs permission to access your photo library to save and manage training sessions.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

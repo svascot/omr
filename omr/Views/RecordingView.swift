@@ -34,6 +34,9 @@ struct RecordingView: View {
                             .font(.system(size: 80, weight: .black, design: .rounded))
                             .foregroundStyle(.white)
                             .shadow(color: .black.opacity(0.3), radius: 10, x: 0, y: 5)
+                            .onTapGesture {
+                                mockReps += 1
+                            }
                     }
                     Spacer()
                     
@@ -65,11 +68,11 @@ struct RecordingView: View {
                                 cameraManager.startRecording()
                             }
                         }) {
-                            Image(systemName: cameraManager.status == .paused ? "play.fill" : "pause.fill")
+                            Image(systemName: recordingIcon)
                                 .font(.title)
                                 .foregroundStyle(.white)
                                 .frame(width: 80, height: 80)
-                                .background(.ultraThinMaterial)
+                                .background(recordingButtonColor)
                                 .clipShape(Circle())
                         }
                         
@@ -128,7 +131,7 @@ struct RecordingView: View {
             }
         }
         .onAppear {
-            cameraManager.startRecording()
+            // Manual start requested - removed cameraManager.startRecording()
         }
         .statusBarHidden()
     }
@@ -137,6 +140,22 @@ struct RecordingView: View {
         let mins = Int(seconds) / 60
         let secs = Int(seconds) % 60
         return String(format: "%02d:%02d", mins, secs)
+    }
+    
+    private var recordingButtonColor: Color {
+        switch cameraManager.status {
+        case .recording: return .red
+        case .paused: return .red.opacity(0.5)
+        default: return .gray.opacity(0.8)
+        }
+    }
+    
+    private var recordingIcon: String {
+        switch cameraManager.status {
+        case .recording: return "pause.fill"
+        case .paused: return "play.fill"
+        default: return "circle.fill"
+        }
     }
 }
 

@@ -121,11 +121,14 @@ class CameraManager: NSObject, ObservableObject {
                 self.assetWriterInput = input
                 self.startTimeAtEngine = nil
                 self.timeOffsetAtEngine = .zero
+                self.lastFrameTimeAtEngine = .zero // Explicitly reset this
                 self.isRecordingAtEngine = true
                 self.isPausedAtEngine = false
+                self.isResumingAtEngine = false // Ensure resume flag is clear
                 
                 self.updateStatus(.recording)
             } catch {
+                print("DEBUG: AVAssetWriter error: \(error.localizedDescription)")
                 self.updateStatus(.error("Failed to start writer: \(error.localizedDescription)"))
             }
         }
@@ -155,13 +158,23 @@ class CameraManager: NSObject, ObservableObject {
             guard let self = self else { return }
             self.isRecordingAtEngine = false
             
-            guard let writer = self.assetWriter, writer.status == .writing else {
+            guard let writer = self.assetWriter else {
+                print("DEBUG: No asset writer found upon stop.")
+                DispatchQueue.main.async { completion(nil) }
+                return
+            }
+            
+            if writer.status != .writing {
+                print("DEBUG: Writer status is \(writer.status.rawValue) (not writing). Error: \(writer.error?.localizedDescription ?? "none")")
                 DispatchQueue.main.async { completion(nil) }
                 return
             }
             
             self.assetWriterInput?.markAsFinished()
             writer.finishWriting {
+                if writer.status == .failed {
+                    print("DEBUG: Writer failed during finishWriting: \(writer.error?.localizedDescription ?? "unknown")")
+                }
                 let url = self.currentVideoURLAtEngine
                 self.assetWriter = nil
                 self.assetWriterInput = nil

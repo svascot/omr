@@ -27,13 +27,14 @@ class AppState: ObservableObject {
     
     // Action to start training
     func startTraining() {
+        lastVideoURL = nil // Clear stale URL from previous session
         currentScreen = .recording
     }
     
     // Action to end training
     func endTraining(reps: Int, duration: TimeInterval, videoURL: URL?) {
-        // Simple streak logic: only increment if they actually did reps
-        let newStreak = reps > 0 ? lastSession.streak + 1 : lastSession.streak
+        // Relaxed streak logic: count if reps > 0 OR session was long enough (e.g. > 5s)
+        let newStreak = (reps > 0 || duration > 5) ? lastSession.streak + 1 : lastSession.streak
         lastSession = SessionStats(reps: reps, duration: duration, streak: newStreak)
         lastVideoURL = videoURL
         currentScreen = .summary
