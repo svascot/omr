@@ -13,7 +13,7 @@ class MovementService: NSObject, ObservableObject, @unchecked Sendable {
     private nonisolated(unsafe) var bodyPoseRequest = VNDetectHumanBodyPoseRequest()
     private nonisolated(unsafe) var peakY: CGFloat = -1
     private nonisolated(unsafe) var valleyY: CGFloat = 2
-    private let motionThreshold: CGFloat = 0.1 // Cumulative displacement threshold
+    private let motionThreshold: CGFloat = 0.05 // Increased sensitivity (5% of screen height)
     
     enum MovementState: Sendable {
         case up
@@ -31,11 +31,17 @@ class MovementService: NSObject, ObservableObject, @unchecked Sendable {
             try handler.perform([bodyPoseRequest])
             guard let observation = bodyPoseRequest.results?.first else { return }
             
-            // Get neck point as a stable reference for torso height
-            let neckPoint = try observation.recognizedPoint(.neck)
-            guard neckPoint.confidence > 0.5 else { return }
+            // Try to get nose first (as requested for "head" tracking)
+            var targetPoint: VNRecognizedPoint?
+            if let nose = try? observation.recognizedPoint(.nose), nose.confidence > 0.5 {
+                targetPoint = nose
+            } else if let neck = try? observation.recognizedPoint(.neck), neck.confidence > 0.5 {
+                // Fallback to neck for stability
+                targetPoint = neck
+            }
             
-            let currentY = neckPoint.location.y
+            guard let point = targetPoint else { return }
+            let currentY = point.location.y
             
             // Initialization for first frame
             if peakY < 0 {

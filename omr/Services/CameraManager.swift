@@ -86,6 +86,12 @@ class CameraManager: NSObject, ObservableObject {
             
             if self.session.canAddOutput(self.videoOutput) {
                 self.session.addOutput(self.videoOutput)
+                
+                // Force 32BGRA for easier drawing/overlays
+                self.videoOutput.videoSettings = [
+                    kCVPixelBufferPixelFormatTypeKey as String: Int(kCVPixelFormatType_32BGRA)
+                ]
+                
                 self.videoOutput.setSampleBufferDelegate(self, queue: self.videoQueue)
                 self.videoOutput.alwaysDiscardsLateVideoFrames = false
                 
@@ -398,13 +404,14 @@ extension CameraManager: AVCaptureVideoDataOutputSampleBufferDelegate {
         let baseAddress = CVPixelBufferGetBaseAddress(pixelBuffer)
         
         let colorSpace = CGColorSpaceCreateDeviceRGB()
+        // BGRA format: byteOrder32Little | premultipliedFirst
         guard let context = CGContext(data: baseAddress,
                                       width: width,
                                       height: height,
                                       bitsPerComponent: 8,
                                       bytesPerRow: bytesPerRow,
                                       space: colorSpace,
-                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue) else {
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue) else {
             return
         }
         
