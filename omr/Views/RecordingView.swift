@@ -40,7 +40,7 @@ struct RecordingView: View {
                     }
                     .padding(.horizontal, 24)
                     .padding(.vertical, 16)
-                    .background(.ultraThinMaterial)
+                    .background(Rectangle().fill(.ultraThinMaterial))
                     .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
                     .overlay(
                         RoundedRectangle(cornerRadius: 28, style: .continuous)
@@ -118,7 +118,7 @@ struct RecordingView: View {
                         .foregroundStyle(.white)
                 }
                 .padding(24)
-                .background(.ultraThinMaterial)
+                .background(Rectangle().fill(.ultraThinMaterial))
                 .clipShape(RoundedRectangle(cornerRadius: 24))
                 .padding(40)
             }
@@ -211,7 +211,13 @@ struct TimerCard: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-        .background(isSecondary ? Color.black.opacity(0.3) : .ultraThinMaterial)
+        .background {
+            if isSecondary {
+                Color.black.opacity(0.3)
+            } else {
+                Rectangle().fill(.ultraThinMaterial)
+            }
+        }
         .clipShape(Capsule())
         .overlay(
             Capsule()
@@ -240,7 +246,7 @@ struct ControlButton: View {
                             if color == .blue || color == .red || color == .orange {
                                 LinearGradient(colors: [color, color.opacity(0.7)], startPoint: .topLeading, endPoint: .bottomTrailing)
                             } else {
-                                .ultraThinMaterial
+                                Rectangle().fill(.ultraThinMaterial)
                             }
                         }
                     )
