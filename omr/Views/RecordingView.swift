@@ -6,6 +6,7 @@ struct RecordingView: View {
     @StateObject private var cameraManager = CameraManager()
     @State private var mockReps: Int = 0
     @State private var timeElapsed: TimeInterval = 0
+    @State private var totalTimeElapsed: TimeInterval = 0
     
     let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     
@@ -30,25 +31,45 @@ struct RecordingView: View {
                             .fontWeight(.bold)
                             .foregroundStyle(.white.opacity(0.8))
                         
-                        Text("\(mockReps)")
+                        Text("\(cameraManager.movementService.repCount)")
                             .font(.system(size: 80, weight: .black, design: .rounded))
                             .foregroundStyle(.white)
                             .shadow(color: .black.opacity(0.3), radius: 10, x: 0, y: 5)
-                            .onTapGesture {
-                                mockReps += 1
-                            }
                     }
                     Spacer()
                     
-                    // Timer
-                    Text(formatTime(timeElapsed))
-                        .font(.system(.title3, design: .monospaced))
-                        .fontWeight(.bold)
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
+                    // Timers
+                    VStack(alignment: .trailing, spacing: 4) {
+                        HStack(spacing: 8) {
+                            Text("SERIES")
+                                .font(.caption2)
+                                .fontWeight(.bold)
+                                .foregroundStyle(.white.opacity(0.7))
+                            Text(formatTime(timeElapsed))
+                                .font(.system(.body, design: .monospaced))
+                                .fontWeight(.bold)
+                                .foregroundStyle(.white)
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
                         .background(.ultraThinMaterial)
                         .clipShape(Capsule())
+                        
+                        HStack(spacing: 8) {
+                            Text("TOTAL")
+                                .font(.caption2)
+                                .fontWeight(.bold)
+                                .foregroundStyle(.white.opacity(0.7))
+                            Text(formatTime(totalTimeElapsed))
+                                .font(.system(.caption, design: .monospaced))
+                                .fontWeight(.bold)
+                                .foregroundStyle(.white.opacity(0.8))
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(.black.opacity(0.3))
+                        .clipShape(Capsule())
+                    }
                 }
                 .padding(.horizontal, 30)
                 .padding(.top, 20)
@@ -77,8 +98,8 @@ struct RecordingView: View {
                         }
                         
                         HStack(spacing: 4) {
-                            Image(systemName: "hand.raised.fill")
-                            Text("OPEN PALM")
+                            Text("✌️")
+                            Text("Start/Pause")
                         }
                         .font(.caption2)
                         .fontWeight(.bold)
@@ -89,7 +110,10 @@ struct RecordingView: View {
                     VStack(spacing: 12) {
                         Button(action: {
                             cameraManager.stopRecording { url in
-                                appState.endTraining(reps: mockReps, duration: timeElapsed, videoURL: url)
+                                appState.endTraining(reps: cameraManager.movementService.repCount, 
+                                                   duration: timeElapsed, 
+                                                   totalDuration: totalTimeElapsed, 
+                                                   videoURL: url)
                             }
                         }) {
                             Image(systemName: "stop.fill")
@@ -101,8 +125,8 @@ struct RecordingView: View {
                         }
                         
                         HStack(spacing: 4) {
-                            Image(systemName: "hand.point.up.left.fill")
-                            Text("PEACE SIGN")
+                            Text("👋")
+                            Text("Finish Session")
                         }
                         .font(.caption2)
                         .fontWeight(.bold)
@@ -126,9 +150,16 @@ struct RecordingView: View {
             }
         }
         .onReceive(timer) { _ in
+            totalTimeElapsed += 1
             if cameraManager.status == .recording {
                 timeElapsed += 1
             }
+            cameraManager.updateOverlayTimers(series: timeElapsed, total: totalTimeElapsed)
+        }
+        .onChange(of: cameraManager.detectedGesture) { oldValue, newValue in
+            guard let gesture = newValue else { return }
+            handleGesture(gesture)
+            cameraManager.detectedGesture = nil // Reset
         }
         .onAppear {
             // Manual start requested - removed cameraManager.startRecording()
@@ -155,6 +186,26 @@ struct RecordingView: View {
         case .recording: return "pause.fill"
         case .paused: return "play.fill"
         default: return "circle.fill"
+        }
+    }
+    
+    private func handleGesture(_ gesture: CameraManager.GestureAction) {
+        switch gesture {
+        case .peace:
+            if cameraManager.status == .recording {
+                cameraManager.pauseRecording()
+            } else if cameraManager.status == .paused {
+                cameraManager.resumeRecording()
+            } else {
+                cameraManager.startRecording()
+            }
+        case .wave:
+            cameraManager.stopRecording { url in
+                appState.endTraining(reps: cameraManager.movementService.repCount, 
+                                   duration: timeElapsed, 
+                                   totalDuration: totalTimeElapsed, 
+                                   videoURL: url)
+            }
         }
     }
 }

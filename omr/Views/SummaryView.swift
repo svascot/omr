@@ -16,7 +16,8 @@ struct SummaryView: View {
             // Stats Grid
             VStack(spacing: 24) {
                 StatRow(label: "Reps", value: "\(appState.lastSession.reps)", color: .blue)
-                StatRow(label: "Time", value: formatTime(appState.lastSession.duration), color: .green)
+                StatRow(label: "Active Time", value: formatTime(appState.lastSession.duration), color: .green)
+                StatRow(label: "Total Time", value: formatTime(appState.lastSession.totalDuration), color: .cyan)
                 StatRow(label: "New Streak", value: "\(appState.lastSession.streak)", color: .orange)
             }
             .padding(30)

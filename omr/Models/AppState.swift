@@ -10,13 +10,14 @@ enum AppScreen {
 
 struct SessionStats: Codable {
     var reps: Int
-    var duration: TimeInterval
+    var duration: TimeInterval // Active recording time
+    var totalDuration: TimeInterval // Total time from landing on screen
     var streak: Int
 }
 
 class AppState: ObservableObject {
     @Published var currentScreen: AppScreen = .home
-    @Published var lastSession: SessionStats = SessionStats(reps: 0, duration: 0, streak: 0)
+    @Published var lastSession: SessionStats = SessionStats(reps: 0, duration: 0, totalDuration: 0, streak: 0)
     @Published var lastVideoURL: URL?
     
     private let storageURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("user_data.json")
@@ -32,10 +33,10 @@ class AppState: ObservableObject {
     }
     
     // Action to end training
-    func endTraining(reps: Int, duration: TimeInterval, videoURL: URL?) {
+    func endTraining(reps: Int, duration: TimeInterval, totalDuration: TimeInterval, videoURL: URL?) {
         // Relaxed streak logic: count if reps > 0 OR session was long enough (e.g. > 5s)
         let newStreak = (reps > 0 || duration > 5) ? lastSession.streak + 1 : lastSession.streak
-        lastSession = SessionStats(reps: reps, duration: duration, streak: newStreak)
+        lastSession = SessionStats(reps: reps, duration: duration, totalDuration: totalDuration, streak: newStreak)
         lastVideoURL = videoURL
         currentScreen = .summary
         saveData()
