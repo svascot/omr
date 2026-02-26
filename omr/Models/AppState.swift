@@ -44,19 +44,35 @@ class AppState: ObservableObject {
     
     // Action to save video to library
     func saveVideoToLibrary() {
-        guard let url = lastVideoURL else { return }
+        guard let url = lastVideoURL else {
+            print("DEBUG: No video URL available to save.")
+            return
+        }
         
-        PHPhotoLibrary.requestAuthorization { status in
-            if status == .authorized {
+        // Ensure file exists
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            print("DEBUG: Video file does not exist at path: \(url.path)")
+            return
+        }
+        
+        PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
+            switch status {
+            case .authorized, .limited:
                 PHPhotoLibrary.shared().performChanges({
                     PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: url)
                 }) { success, error in
                     if success {
-                        print("Video saved successfully!")
+                        print("DEBUG: Video saved to camera roll successfully!")
                     } else {
-                        print("Error saving video: \(error?.localizedDescription ?? "unknown error")")
+                        print("DEBUG: Error saving video to camera roll: \(error?.localizedDescription ?? "unknown error")")
                     }
                 }
+            case .denied, .restricted:
+                print("DEBUG: Photo Library access denied or restricted.")
+            case .notDetermined:
+                print("DEBUG: Photo Library access not determined.")
+            @unknown default:
+                print("DEBUG: Unknown Photo Library authorization status.")
             }
         }
     }

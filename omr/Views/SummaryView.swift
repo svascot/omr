@@ -2,84 +2,143 @@ import SwiftUI
 
 struct SummaryView: View {
     @EnvironmentObject var appState: AppState
+    @State private var isVisible = false
     
     var body: some View {
-        VStack(spacing: 30) {
-            // Header
-            Text("Training Stats")
-                .font(.system(.title, design: .rounded))
-                .fontWeight(.bold)
-                .padding(.top, 40)
+        ZStack {
+            // Background Gradient (Matches HomeView)
+            LinearGradient(colors: [Color.green.opacity(0.15), Color.blue.opacity(0.1), Color(uiColor: .systemBackground)],
+                           startPoint: .topLeading,
+                           endPoint: .bottomTrailing)
+                .ignoresSafeArea()
             
-            Spacer()
-            
-            // Stats Grid
-            VStack(spacing: 24) {
-                StatRow(label: "Reps", value: "\(appState.lastSession.reps)", color: .blue)
-                StatRow(label: "Active Time", value: formatTime(appState.lastSession.duration), color: .green)
-                StatRow(label: "Total Time", value: formatTime(appState.lastSession.totalDuration), color: .cyan)
-                StatRow(label: "New Streak", value: "\(appState.lastSession.streak)", color: .orange)
-            }
-            .padding(30)
-            .background(.thinMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
-            .padding(.horizontal, 24)
-            
-            Spacer()
-            
-            // Footer Actions
-            VStack(spacing: 16) {
-                Button(action: {
-                    appState.saveVideoToLibrary()
-                    appState.saveAndReturnHome()
-                }) {
-                    Text("Save Session")
-                        .font(.headline)
-                        .fontWeight(.bold)
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color.blue)
-                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            VStack(spacing: 0) {
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 32) {
+                        // Header
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Training Complete!")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                                .foregroundStyle(.secondary)
+                            
+                            Text("Summary")
+                                .font(.system(.largeTitle, design: .rounded))
+                                .fontWeight(.black)
+                                .foregroundStyle(.primary)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.top, 20)
+                        .offset(y: isVisible ? 0 : 20)
+                        .opacity(isVisible ? 1 : 0)
+                        
+                        // Main Stats Grid
+                        VStack(spacing: 20) {
+                            HStack(spacing: 16) {
+                                SummaryStatCard(title: "Reps", value: "\(appState.lastSession.reps)", icon: "figure.strengthtraining.traditional", color: .blue)
+                                SummaryStatCard(title: "Active", value: formatTime(appState.lastSession.duration), icon: "timer", color: .green)
+                            }
+                            
+                            HStack(spacing: 16) {
+                                SummaryStatCard(title: "Total Time", value: formatTime(appState.lastSession.totalDuration), icon: "clock.fill", color: .cyan)
+                                SummaryStatCard(title: "Streak", value: "\(appState.lastSession.streak)", icon: "flame.fill", color: .orange)
+                            }
+                        }
+                        .offset(y: isVisible ? 0 : 20)
+                        .opacity(isVisible ? 1 : 0)
+                    }
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 140)
                 }
                 
-                Button(action: {
-                    appState.discardAndReturnHome()
-                }) {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.title2)
-                        .foregroundStyle(.secondary)
+                // Footer Buttons (Matches HomeView style)
+                VStack(spacing: 16) {
+                    Button(action: {
+                        appState.saveAndReturnHome()
+                    }) {
+                        Text("FINISH SESSION")
+                            .font(.headline)
+                            .fontWeight(.bold)
+                            .tracking(1)
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 64)
+                            .background(
+                                LinearGradient(colors: [Color.blue, Color.blue.opacity(0.8)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                            )
+                            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                            .shadow(color: .blue.opacity(0.4), radius: 15, x: 0, y: 8)
+                    }
+                    
+                    Button(action: {
+                        appState.discardAndReturnHome()
+                    }) {
+                        Text("DISCARD DATA")
+                            .font(.caption)
+                            .fontWeight(.bold)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.bottom, 10)
                 }
-                .padding(.top, 8)
+                .padding(.horizontal, 24)
+                .padding(.bottom, 20)
+                .background(
+                    Color(uiColor: .systemBackground)
+                        .opacity(0.8)
+                        .background(.ultraThinMaterial)
+                        .mask(LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom))
+                )
             }
-            .padding(.horizontal, 24)
-            .padding(.bottom, 40)
+        }
+        .onAppear {
+            // Note: saveVideoToLibrary is now handled automatically in RecordingView for gestures
+            withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.1)) {
+                isVisible = true
+            }
         }
     }
     
     private func formatTime(_ seconds: TimeInterval) -> String {
         let mins = Int(seconds) / 60
         let secs = Int(seconds) % 60
-        return String(format: "%d:%02d min", mins, secs)
+        return String(format: "%02d:%02d", mins, secs)
     }
 }
 
-struct StatRow: View {
-    let label: String
+// Reusable Stat Card specifically for Summary (consistent with HomeView but slightly modified if needed)
+struct SummaryStatCard: View {
+    let title: String
     let value: String
+    let icon: String
     let color: Color
     
     var body: some View {
-        HStack {
-            Text(label)
-                .font(.headline)
-                .foregroundStyle(.secondary)
-            Spacer()
-            Text(value)
-                .font(.system(.title2, design: .monospaced))
-                .fontWeight(.black)
+        VStack(alignment: .leading, spacing: 12) {
+            Image(systemName: icon)
+                .font(.title3)
                 .foregroundStyle(color)
+                .frame(width: 40, height: 40)
+                .background(color.opacity(0.1))
+                .clipShape(Circle())
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text(value)
+                    .font(.system(.title3, design: .rounded))
+                    .fontWeight(.bold)
+                Text(title)
+                    .font(.caption2)
+                    .fontWeight(.medium)
+                    .foregroundStyle(.secondary)
+            }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(20)
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .stroke(.white.opacity(0.5), lineWidth: 1)
+        )
     }
 }
 

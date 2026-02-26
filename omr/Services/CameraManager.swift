@@ -203,30 +203,43 @@ class CameraManager: NSObject, ObservableObject {
         print("DEBUG: Action - STOP/FINISH RECORDING")
         sessionQueue.async { [weak self] in
             guard let self = self else { return }
+            
+            // Capture state before resetting
+            let wasRecording = self.isRecordingAtEngine
             self.isRecordingAtEngine = false
             
-            guard let writer = self.assetWriter else {
-                print("DEBUG: No asset writer found upon stop.")
+            guard let writer = self.assetWriter, let input = self.assetWriterInput else {
+                print("DEBUG: No asset writer or input found upon stop. Recording was active: \(wasRecording)")
                 DispatchQueue.main.async { completion(nil) }
                 return
             }
             
-            if writer.status != .writing {
-                print("DEBUG: Writer status is \(writer.status.rawValue) (not writing). Error: \(writer.error?.localizedDescription ?? "none")")
-                DispatchQueue.main.async { completion(nil) }
-                return
-            }
+            print("DEBUG: Finalizing recording. Status: \(writer.status.rawValue), Paused: \(self.isPausedAtEngine)")
             
-            self.assetWriterInput?.markAsFinished()
-            writer.finishWriting {
-                if writer.status == .failed {
-                    print("DEBUG: Writer failed during finishWriting: \(writer.error?.localizedDescription ?? "unknown")")
+            // If the writer is currently writing or even if it's in a state that can be finished
+            if writer.status == .writing {
+                input.markAsFinished()
+                writer.finishWriting {
+                    let url = self.currentVideoURLAtEngine
+                    if writer.status == .failed {
+                        print("DEBUG: Writer failed during finishWriting: \(writer.error?.localizedDescription ?? "unknown")")
+                        DispatchQueue.main.async { completion(nil) }
+                    } else {
+                        print("DEBUG: Recording finalized successfully at: \(url?.path ?? "unknown")")
+                        DispatchQueue.main.async { completion(url) }
+                    }
+                    
+                    self.assetWriter = nil
+                    self.assetWriterInput = nil
+                    self.updateStatus(.configured)
                 }
-                let url = self.currentVideoURLAtEngine
+            } else {
+                print("DEBUG: Cannot finish writing. Writer status is \(writer.status.rawValue). Error: \(writer.error?.localizedDescription ?? "none")")
+                // Cleanup regardless
                 self.assetWriter = nil
                 self.assetWriterInput = nil
                 self.updateStatus(.configured)
-                DispatchQueue.main.async { completion(url) }
+                DispatchQueue.main.async { completion(nil) }
             }
         }
     }

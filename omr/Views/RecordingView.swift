@@ -114,6 +114,9 @@ struct RecordingView: View {
                                                    duration: timeElapsed, 
                                                    totalDuration: totalTimeElapsed, 
                                                    videoURL: url)
+                                if url != nil {
+                                    appState.saveVideoToLibrary()
+                                }
                             }
                         }) {
                             Image(systemName: "stop.fill")
@@ -205,6 +208,10 @@ struct RecordingView: View {
                                    duration: timeElapsed, 
                                    totalDuration: totalTimeElapsed, 
                                    videoURL: url)
+                // Automate saving if finished via gesture
+                if url != nil {
+                    appState.saveVideoToLibrary()
+                }
             }
         }
     }
