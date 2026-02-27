@@ -6,6 +6,7 @@ struct RecordingView: View {
     @StateObject private var cameraManager = CameraManager()
     @State private var timeElapsed: TimeInterval = 0
     @State private var totalTimeElapsed: TimeInterval = 0
+    @State private var sets: Int = 0
     @State private var isVisible = false
     
     let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
@@ -74,8 +75,10 @@ struct RecordingView: View {
                                 if cameraManager.status == .recording {
                                     cameraManager.pauseRecording()
                                 } else if cameraManager.status == .paused {
+                                    sets += 1
                                     cameraManager.resumeRecording()
                                 } else {
+                                    sets += 1
                                     cameraManager.startRecording()
                                 }
                             }
@@ -90,6 +93,7 @@ struct RecordingView: View {
                         action: {
                             cameraManager.stopRecording { url in
                                 appState.endTraining(reps: cameraManager.movementService.repCount, 
+                                                   sets: sets,
                                                    duration: timeElapsed, 
                                                    totalDuration: totalTimeElapsed, 
                                                    videoURL: url)
@@ -168,13 +172,16 @@ struct RecordingView: View {
             if cameraManager.status == .recording {
                 cameraManager.pauseRecording()
             } else if cameraManager.status == .paused {
+                sets += 1
                 cameraManager.resumeRecording()
             } else {
+                sets += 1
                 cameraManager.startRecording()
             }
         case .wave:
             cameraManager.stopRecording { url in
                 appState.endTraining(reps: cameraManager.movementService.repCount, 
+                                   sets: sets,
                                    duration: timeElapsed, 
                                    totalDuration: totalTimeElapsed, 
                                    videoURL: url)

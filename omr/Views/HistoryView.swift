@@ -49,10 +49,17 @@ struct HistoryView: View {
                     
                     Spacer()
                     
-                    Text("HISTORY")
-                        .font(.system(size: 14, weight: .black))
-                        .tracking(2)
-                        .foregroundStyle(.white)
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text("HISTORY")
+                            .font(.system(size: 14, weight: .black))
+                            .tracking(2)
+                            .foregroundStyle(.white)
+                        
+                        Text("TOTAL SESSIONS: \(appState.sessionHistory.count)")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(.white.opacity(0.5))
+                            .tracking(0.5)
+                    }
                 }
                 .padding(.horizontal, 24)
                 .padding(.top, 20)
@@ -82,6 +89,17 @@ struct HistoryView: View {
                 }
             }
         }
+        .gesture(
+            DragGesture()
+                .onEnded { value in
+                    // Only trigger if starting from the left edge (first 50px) and swiping right
+                    if value.startLocation.x < 50 && value.translation.width > 80 && abs(value.translation.height) < 50 {
+                        withAnimation(.spring()) {
+                            appState.discardAndReturnHome()
+                        }
+                    }
+                }
+        )
         .onAppear {
             withAnimation(.spring()) {
                 isVisible = true
@@ -122,10 +140,17 @@ struct HistoryCard: View {
                 .clipShape(Capsule())
             }
             
-            HStack(spacing: 12) {
-                HistoryMetric(label: "REPS", value: "\(session.reps)", icon: "arrow.clockwise")
-                HistoryMetric(label: "TIME", value: formatTime(session.duration), icon: "stopwatch.fill")
-                HistoryMetric(label: "STREAK", value: "\(session.streak)", icon: "flame.fill", color: .orange)
+            VStack(spacing: 12) {
+                HStack(spacing: 12) {
+                    HistoryMetric(label: "REPS", value: "\(session.reps)", icon: "figure.strengthtraining.traditional")
+                    HistoryMetric(label: "ACTIVE", value: formatTime(session.duration), icon: "timer")
+                }
+                
+                HStack(spacing: 12) {
+                    HistoryMetric(label: "TOTAL", value: formatTime(session.totalDuration), icon: "clock.fill")
+                    HistoryMetric(label: "SETS", value: "\(session.sets)", icon: "list.bullet.indent", color: .purple)
+                    HistoryMetric(label: "STREAK", value: "\(session.streak)", icon: "flame.fill", color: .orange)
+                }
             }
         }
         .padding(20)

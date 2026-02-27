@@ -17,12 +17,17 @@ One More Rep (OMR) is a native iOS application designed to automate fitness trac
 ## 3. Core Services & Logic
 
 ### 🎥 The Stitcher (`CameraManager.swift`)
-* Manages a continuous `AVCaptureSession`.
-* Records logic-driven video using `AVAssetWriter`.
-* **Overlays:** Burned-in Core Graphics overlays (glassmorphic style) that match the app UI exactly.
+The `CameraManager` implementation is a high-performance video recorder built on `AVFoundation`.
+- **Seamless Recording:** It handles pause/resume by managing a `timeOffsetAtEngine` (CMTime). It subtracts the "pause gap" from the frame timestamps to produce a single, gapless `.mov` file.
+- **Core Graphics Pipeline:** Frames are captured in `32BGRA`. Overlays are drawn via `UIGraphicsPushContext` directly on the `CVPixelBuffer` before being appended to the `AVAssetWriterInput`.
+- **Robust Gestures:** 
+    - **Confidence:** Floor lowered to `0.45` for better low-light performance.
+    - **Relative Logic:** Detects gestures by comparing tip heights (Index/Middle vs Ring/Little) relative to the `wrist`, making it orientation-independent.
+    - **Temporal Buffering:** Requires `3` consecutive frames of detection before triggering, reducing false positives.
+- **Layout Logic:** Centering is handled via `NSMutableParagraphStyle` and `CGRect` calculations to ensure pixel-perfect alignment in the saved file.
 * **Gestures:** 
-    - **Peace Sign:** Finalizes recording.
-    - **Open Palm/Wave:** Toggles Pause/Resume/Start.
+    - **Peace Sign (Two Fingers):** Finalizes recording (Uses relative finger height logic).
+    - **Open Palm/Wave:** Toggles Pause/Resume/Start (Uses temporal confirmation buffer).
 
 ### 🤖 Movement Engine (`MovementService.swift`)
 * **Relaxed Mode (Phase 1):** Tracks the Y-axis displacement of the `.nose` (fallback to `.neck`).

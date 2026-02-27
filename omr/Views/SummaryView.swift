@@ -41,6 +41,7 @@ struct SummaryView: View {
                             
                             HStack(spacing: 16) {
                                 SummaryStatCard(title: "Total Time", value: formatTime(appState.lastSession?.totalDuration ?? 0), icon: "clock.fill", color: .cyan)
+                                SummaryStatCard(title: "Sets", value: "\(appState.lastSession?.sets ?? 0)", icon: "list.bullet.indent", color: .purple)
                                 SummaryStatCard(title: "Streak", value: "\(appState.lastSession?.streak ?? 0)", icon: "flame.fill", color: .orange)
                             }
                         }

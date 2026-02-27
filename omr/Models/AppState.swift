@@ -16,6 +16,7 @@ struct SessionStats: Codable, Identifiable {
     var reps: Int
     var duration: TimeInterval // Active recording time
     var totalDuration: TimeInterval // Total time from landing on screen
+    var sets: Int
     var streak: Int
 }
 
@@ -44,7 +45,7 @@ class AppState: ObservableObject {
     }
     
     // Action to end training
-    func endTraining(reps: Int, duration: TimeInterval, totalDuration: TimeInterval, videoURL: URL?) {
+    func endTraining(reps: Int, sets: Int, duration: TimeInterval, totalDuration: TimeInterval, videoURL: URL?) {
         // Relaxed streak logic: count if reps > 0 OR session was long enough (e.g. > 5s)
         let previousStreak = sessionHistory.last?.streak ?? 0
         let newStreak = (reps > 0 || duration > 5) ? previousStreak + 1 : previousStreak
@@ -54,6 +55,7 @@ class AppState: ObservableObject {
             reps: reps,
             duration: duration,
             totalDuration: totalDuration,
+            sets: sets,
             streak: newStreak
         )
         

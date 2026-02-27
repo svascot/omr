@@ -49,9 +49,14 @@ class CameraManager: NSObject, ObservableObject {
     // Wave detection state
     private nonisolated(unsafe) var handXHistory: [CGFloat] = []
     private nonisolated(unsafe) var lastPalmDetectionTime: Date = .distantPast
-    private let waveThreshold: CGFloat = 0.12 // Slightly lowered for better sensitivity
-    private let historyLimit = 15
+    private let waveThreshold: CGFloat = 0.10 // Slightly lowered for better distance sensitivity
+    private let historyLimit = 20 // Increased history for smoother wave detection
     private let historyTimeout: TimeInterval = 0.8 // Clear history if no palm for 0.8s
+    
+    // Gesture confirmation buffers
+    private nonisolated(unsafe) var peaceFramesCount = 0
+    private nonisolated(unsafe) var waveFramesCount = 0
+    private let gestureRequiredFrames = 3 // Frames needed to confirm a gesture
     
     // Engine properties: Managed STRICTLY on sessionQueue/videoQueue
     nonisolated(unsafe) private var assetWriter: AVAssetWriter?
@@ -65,6 +70,7 @@ class CameraManager: NSObject, ObservableObject {
     nonisolated(unsafe) private var startTimeAtEngine: CMTime?
     nonisolated(unsafe) private var timeOffsetAtEngine: CMTime = .zero
     nonisolated(unsafe) private var lastFrameTimeAtEngine: CMTime = .zero
+    nonisolated(unsafe) private var lastUnadjustedFrameTimeAtEngine: CMTime = .zero
     
     override init() {
         super.init()
@@ -161,10 +167,11 @@ class CameraManager: NSObject, ObservableObject {
                 self.assetWriterInput = input
                 self.startTimeAtEngine = nil
                 self.timeOffsetAtEngine = .zero
-                self.lastFrameTimeAtEngine = .zero // Explicitly reset this
+                self.lastFrameTimeAtEngine = .zero 
+                self.lastUnadjustedFrameTimeAtEngine = .zero // Explicitly reset this
                 self.isRecordingAtEngine = true
                 self.isPausedAtEngine = false
-                self.isResumingAtEngine = false // Ensure resume flag is clear
+                self.isResumingAtEngine = false 
                 
                 self.movementService.resetCounter()
                 self.seriesTimeForOverlay = 0
@@ -191,7 +198,8 @@ class CameraManager: NSObject, ObservableObject {
         print("DEBUG: Action - RESUME RECORDING")
         sessionQueue.async { [weak self] in
             guard let self = self else { return }
-            if self.lastFrameTimeAtEngine.value > 0 {
+            // Only flag resume if we have a valid previous unadjusted frame time
+            if self.lastUnadjustedFrameTimeAtEngine.value > 0 {
                 self.isResumingAtEngine = true
             }
             self.isPausedAtEngine = false
@@ -239,7 +247,10 @@ class CameraManager: NSObject, ObservableObject {
                 self.assetWriter = nil
                 self.assetWriterInput = nil
                 self.updateStatus(.configured)
-                DispatchQueue.main.async { completion(nil) }
+                DispatchQueue.main.async { 
+                    print("DEBUG: Stop recording failed, returning nil URL")
+                    completion(nil) 
+                }
             }
         }
     }
@@ -281,9 +292,16 @@ extension CameraManager: AVCaptureVideoDataOutputSampleBufferDelegate {
         if isPausedAtEngine { return } // Do not append frames if paused
         
         if isResumingAtEngine {
-            let gap = CMTimeSubtract(timestamp, lastFrameTimeAtEngine)
-            timeOffsetAtEngine = CMTimeAdd(timeOffsetAtEngine, gap)
+            // Calculate gap using raw (unadjusted) timestamps
+            let gap = CMTimeSubtract(timestamp, lastUnadjustedFrameTimeAtEngine)
+            
+            // Add a tiny safety offset (0.001s) to ensure strictly increasing timestamps
+            let safetyOffset = CMTime(value: 1, timescale: 1000)
+            let adjustedGap = CMTimeSubtract(gap, safetyOffset)
+            
+            timeOffsetAtEngine = CMTimeAdd(timeOffsetAtEngine, adjustedGap)
             isResumingAtEngine = false
+            print("DEBUG: Resume detected. New time offset: \(timeOffsetAtEngine.seconds)s")
         }
         
         var adjustedBuffer: CMSampleBuffer?
@@ -309,8 +327,19 @@ extension CameraManager: AVCaptureVideoDataOutputSampleBufferDelegate {
             if let pixelBuffer = CMSampleBufferGetImageBuffer(bufferToWrite) {
                 addOverlays(to: pixelBuffer)
             }
-            input.append(bufferToWrite)
-            lastFrameTimeAtEngine = CMSampleBufferGetPresentationTimeStamp(bufferToWrite)
+            
+            let presentationTime = CMSampleBufferGetPresentationTimeStamp(bufferToWrite)
+            
+            // Double check for strictly increasing timestamps against adjusted timeline
+            if presentationTime > lastFrameTimeAtEngine {
+                input.append(bufferToWrite)
+                lastFrameTimeAtEngine = presentationTime
+            } else {
+                print("DEBUG: Dropping frame with non-increasing adjusted timestamp")
+            }
+            
+            // Always update last raw unadjusted timestamp
+            lastUnadjustedFrameTimeAtEngine = timestamp
         }
         
         // Rep Counting - Only when recording and NOT paused
@@ -329,7 +358,9 @@ extension CameraManager: AVCaptureVideoDataOutputSampleBufferDelegate {
                       let indexPoints = try? observation.recognizedPoints(.indexFinger),
                       let middlePoints = try? observation.recognizedPoints(.middleFinger),
                       let ringPoints = try? observation.recognizedPoints(.ringFinger),
-                      let littlePoints = try? observation.recognizedPoints(.littleFinger) else { continue }
+                      let littlePoints = try? observation.recognizedPoints(.littleFinger),
+                      let wristPoints = try? observation.recognizedPoints(.all),
+                      let wrist = wristPoints[.wrist] else { continue }
                 
                 // Extract tip points
                 guard let thumbTip = thumbPoints[.thumbTip],
@@ -338,28 +369,41 @@ extension CameraManager: AVCaptureVideoDataOutputSampleBufferDelegate {
                       let ringTip = ringPoints[.ringTip],
                       let littleTip = littlePoints[.littleTip] else { continue }
                 
-                // Basic gesture logic: Compare tip positions for "extended" fingers
-                // Note: Vision coordinates are normalized (0-1). .up orientation means 1.0 is top.
+                // Lower confidence floor for distance/low-light
+                let confFloor: Float = 0.45
                 
-                let isThumbExtended = thumbTip.confidence > 0.7 && thumbTip.location.y > (thumbPoints[.thumbIP]?.location.y ?? 0)
-                let isIndexExtended = indexTip.confidence > 0.7 && indexTip.location.y > (indexPoints[.indexPIP]?.location.y ?? 0)
-                let isMiddleExtended = middleTip.confidence > 0.7 && middleTip.location.y > (middlePoints[.middlePIP]?.location.y ?? 0)
-                let isRingExtended = ringTip.confidence > 0.7 && ringTip.location.y > (ringPoints[.ringPIP]?.location.y ?? 0)
-                let isLittleExtended = littleTip.confidence > 0.7 && littleTip.location.y > (littlePoints[.littlePIP]?.location.y ?? 0)
+                // 1. Peace Sign Logic (Improved)
+                // Instead of just "extended", we check if index/middle are significantly above ring/little tips
+                // Vision coordinates: 0.0 is bottom, 1.0 is top.
+                let indexHeight = indexTip.location.y - wrist.location.y
+                let middleHeight = middleTip.location.y - wrist.location.y
+                let ringHeight = ringTip.location.y - wrist.location.y
+                let littleHeight = littleTip.location.y - wrist.location.y
                 
-                // Peace Sign: Index and Middle extended, others folded
-                if isIndexExtended && isMiddleExtended && !isRingExtended && !isLittleExtended && !isThumbExtended {
-                    print("DEBUG: Vision identified PEACE sign")
-                    triggerGesture(.peace)
-                    return
+                let isIndexPeak = indexTip.confidence > confFloor && indexHeight > 0.2
+                let isMiddlePeak = middleTip.confidence > confFloor && middleHeight > 0.2
+                let areOthersLower = ringHeight < indexHeight * 0.6 && littleHeight < indexHeight * 0.6
+                
+                if isIndexPeak && isMiddlePeak && areOthersLower {
+                    peaceFramesCount += 1
+                    if peaceFramesCount >= gestureRequiredFrames {
+                        print("DEBUG: Vision confirmed PEACE sign (\(peaceFramesCount) frames)")
+                        triggerGesture(.peace)
+                        peaceFramesCount = 0
+                    }
+                } else {
+                    peaceFramesCount = 0
                 }
                 
-                // Hand Wave Detection: Focus on 4 main fingers, thumb is often unreliable
-                let isOpenPalm = isIndexExtended && isMiddleExtended && isRingExtended && isLittleExtended
+                // 2. Open Palm / Wave Logic (Improved)
+                let isPalmConf = indexTip.confidence > confFloor && middleTip.confidence > confFloor && ringTip.confidence > confFloor
+                let isIndexExt = indexHeight > 0.15
+                let isMiddleExt = middleHeight > 0.15
+                let isRingExt = ringHeight > 0.15
+                let isPalmOpen = isPalmConf && isIndexExt && isMiddleExt && isRingExt
                 
-                if isOpenPalm {
+                if isPalmOpen {
                     let now = Date()
-                    // Clear history if there's a big time gap (detection lost for too long)
                     if now.timeIntervalSince(lastPalmDetectionTime) > historyTimeout {
                         handXHistory.removeAll()
                     }
@@ -376,16 +420,21 @@ extension CameraManager: AVCaptureVideoDataOutputSampleBufferDelegate {
                         let maxX = handXHistory.max() ?? 0
                         let displacement = maxX - minX
                         
+                        // We check for wave displacement
                         if displacement > waveThreshold {
-                            print("DEBUG: Vision identified HAND WAVE (displacement: \(displacement))")
-                            triggerGesture(.wave)
-                            handXHistory.removeAll() // Reset after trigger
-                            return
+                            waveFramesCount += 1
+                            if waveFramesCount >= gestureRequiredFrames {
+                                print("DEBUG: Vision confirmed WAVE (displacement: \(String(format: "%.2f", displacement)))")
+                                triggerGesture(.wave)
+                                handXHistory.removeAll()
+                                waveFramesCount = 0
+                            }
+                        } else {
+                            waveFramesCount = 0
                         }
                     }
                 } else {
-                    // Do NOT clear history immediately on flicker (relaxed approach)
-                    // It will timeout via historyTimeout if the hand is truly gone.
+                    waveFramesCount = 0
                 }
             }
         } catch {
