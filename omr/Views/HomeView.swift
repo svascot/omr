@@ -16,18 +16,39 @@ struct HomeView: View {
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 32) {
                         // Header
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Welcome back,")
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                                .foregroundStyle(.secondary)
+                        HStack(alignment: .bottom) {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Welcome back,")
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                    .foregroundStyle(.secondary)
+                                
+                                Text(appState.currentUser.capitalized)
+                                    .font(.system(.largeTitle, design: .rounded))
+                                    .fontWeight(.black)
+                                    .foregroundStyle(.primary)
+                            }
                             
-                            Text("Santiago")
-                                .font(.system(.largeTitle, design: .rounded))
-                                .fontWeight(.black)
-                                .foregroundStyle(.primary)
+                            Spacer()
+                            
+                            Button(action: {
+                                withAnimation {
+                                    appState.showHistory()
+                                }
+                            }) {
+                                VStack(spacing: 4) {
+                                    Image(systemName: "clock.arrow.circlepath")
+                                        .font(.title3)
+                                    Text("HISTORY")
+                                        .font(.system(size: 8, weight: .black))
+                                }
+                                .foregroundStyle(.blue)
+                                .frame(width: 64, height: 64)
+                                .background(.ultraThinMaterial)
+                                .clipShape(Circle())
+                                .overlay(Circle().stroke(.white.opacity(0.2), lineWidth: 1))
+                            }
                         }
-                        .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.top, 20)
                         .offset(y: isVisible ? 0 : 20)
                         .opacity(isVisible ? 1 : 0)
@@ -52,7 +73,7 @@ struct HomeView: View {
                                     .shadow(color: .orange.opacity(0.4), radius: 10)
                                 
                                 VStack(alignment: .leading, spacing: 4) {
-                                    Text("\(appState.lastSession.streak)")
+                                    Text("\(appState.lastSession?.streak ?? 0)")
                                         .font(.system(size: 34, weight: .black, design: .rounded))
                                     Text("Day Streak")
                                         .font(.subheadline)
@@ -84,8 +105,8 @@ struct HomeView: View {
                             }
                             
                             HStack(spacing: 16) {
-                                StatCard(title: "Reps", value: "\(appState.lastSession.reps)", icon: "figure.strengthtraining.traditional", color: .blue)
-                                StatCard(title: "Duration", value: formatTime(appState.lastSession.duration), icon: "timer", color: .purple)
+                                StatCard(title: "Reps", value: "\(appState.lastSession?.reps ?? 0)", icon: "figure.strengthtraining.traditional", color: .blue)
+                                StatCard(title: "Duration", value: formatTime(appState.lastSession?.duration ?? 0), icon: "timer", color: .purple)
                             }
                         }
                         .offset(y: isVisible ? 0 : 20)

@@ -411,16 +411,15 @@ extension CameraManager: AVCaptureVideoDataOutputSampleBufferDelegate {
         CVPixelBufferLockBaseAddress(pixelBuffer, [])
         defer { CVPixelBufferUnlockBaseAddress(pixelBuffer, []) }
         
-        let width = CVPixelBufferGetWidth(pixelBuffer)
-        let height = CVPixelBufferGetHeight(pixelBuffer)
+        let width = CGFloat(CVPixelBufferGetWidth(pixelBuffer))
+        let height = CGFloat(CVPixelBufferGetHeight(pixelBuffer))
         let bytesPerRow = CVPixelBufferGetBytesPerRow(pixelBuffer)
         let baseAddress = CVPixelBufferGetBaseAddress(pixelBuffer)
         
         let colorSpace = CGColorSpaceCreateDeviceRGB()
-        // BGRA format: byteOrder32Little | premultipliedFirst
         guard let context = CGContext(data: baseAddress,
-                                      width: width,
-                                      height: height,
+                                      width: Int(width),
+                                      height: Int(height),
                                       bitsPerComponent: 8,
                                       bytesPerRow: bytesPerRow,
                                       space: colorSpace,
@@ -428,32 +427,146 @@ extension CameraManager: AVCaptureVideoDataOutputSampleBufferDelegate {
             return
         }
         
-        // Flip coordinates for drawing text correctly
-        context.translateBy(x: 0, y: CGFloat(height))
+        // Flip coordinates for UIKit drawing
+        context.translateBy(x: 0, y: height)
         context.scaleBy(x: 1, y: -1)
         
         UIGraphicsPushContext(context)
         defer { UIGraphicsPopContext() }
         
-        // Use the thread-safe overlay state
         let state = overlayState
         let reps = state.reps
         let seriesStr = formatTime(state.seriesTime)
         let totalStr = formatTime(state.totalTime)
         
-        // Draw Reps (Top Left)
-        drawText("REPS: \(reps)", at: CGPoint(x: 40, y: 60), size: 60, context: context)
+        // 1. Rep Counter Card (Top Left)
+        let repCardRect = CGRect(x: 40, y: 60, width: 160, height: 160)
+        drawGlassCard(in: repCardRect, context: context, cornerRadius: 28)
         
-        // Draw Series Time (Top Right)
-        drawText("SERIES: \(seriesStr)", at: CGPoint(x: CGFloat(width) - 350, y: 60), size: 40, context: context)
+        // REPS Label - Centered at the top of the card
+        drawCenteredText("REPS", in: CGRect(x: repCardRect.minX, y: repCardRect.minY + 24, width: repCardRect.width, height: 20), size: 12, weight: .bold, tracking: 1.5, color: .white.withAlphaComponent(0.8), context: context)
         
-        // Draw Total Time (Below Series)
-        drawText("TOTAL: \(totalStr)", at: CGPoint(x: CGFloat(width) - 350, y: 110), size: 30, color: .white.withAlphaComponent(0.7), context: context)
+        // Rep Count Value - Centered in the remaining card space
+        drawCenteredRoundedText("\(reps)", in: CGRect(x: repCardRect.minX, y: repCardRect.minY + 44, width: repCardRect.width, height: 100), size: 64, weight: .black, context: context)
+        
+        // 2. Timer Cards (Top Right)
+        let timerCardWidth: CGFloat = 200
+        let timerCardHeight: CGFloat = 44
+        let timerGap: CGFloat = 12
+        let rightMargin: CGFloat = 40
+        let topMargin: CGFloat = 60
+        
+        // Series Time Card
+        let seriesCardRect = CGRect(x: width - timerCardWidth - rightMargin, y: topMargin, width: timerCardWidth, height: timerCardHeight)
+        drawGlassCard(in: seriesCardRect, context: context, cornerRadius: timerCardHeight / 2)
+        
+        drawText("SERIES", at: CGPoint(x: seriesCardRect.minX + 16, y: seriesCardRect.midY - 6), size: 10, weight: .black, tracking: 1.0, color: .white.withAlphaComponent(0.6), context: context)
+        drawMonospacedText(seriesStr, at: CGPoint(x: seriesCardRect.maxX - 70, y: seriesCardRect.midY - 10), size: 17, weight: .bold, context: context)
+        
+        // Total Time Card
+        let totalCardRect = CGRect(x: width - timerCardWidth - rightMargin, y: topMargin + timerCardHeight + timerGap, width: timerCardWidth, height: timerCardHeight)
+        drawGlassCard(in: totalCardRect, context: context, cornerRadius: timerCardHeight / 2, opacity: 0.3)
+        
+        drawText("TOTAL", at: CGPoint(x: totalCardRect.minX + 16, y: totalCardRect.midY - 6), size: 10, weight: .black, tracking: 1.0, color: .white.withAlphaComponent(0.6), context: context)
+        drawMonospacedText(totalStr, at: CGPoint(x: totalCardRect.maxX - 70, y: totalCardRect.midY - 10), size: 17, weight: .bold, color: .white.withAlphaComponent(0.5), context: context)
     }
     
-    nonisolated private func drawText(_ text: String, at point: CGPoint, size: CGFloat, color: UIColor = .white, context: CGContext) {
+    nonisolated private func drawGlassCard(in rect: CGRect, context: CGContext, cornerRadius: CGFloat, opacity: CGFloat = 0.4) {
+        let path = UIBezierPath(roundedRect: rect, cornerRadius: cornerRadius)
+        
+        context.saveGState()
+        
+        // Fill: Simulating ultraThinMaterial with a translucent white/grey
+        context.setFillColor(UIColor.black.withAlphaComponent(opacity).cgColor)
+        context.addPath(path.cgPath)
+        context.fillPath()
+        
+        // Stroke: White border with low opacity
+        context.setStrokeColor(UIColor.white.withAlphaComponent(0.25).cgColor)
+        context.setLineWidth(1.5)
+        context.addPath(path.cgPath)
+        context.strokePath()
+        
+        context.restoreGState()
+    }
+    
+    nonisolated private func drawCenteredText(_ text: String, in rect: CGRect, size: CGFloat, weight: UIFont.Weight = .regular, tracking: CGFloat = 0, color: UIColor = .white, context: CGContext) {
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.alignment = .center
+        
+        var attributes: [NSAttributedString.Key: Any] = [
+            .font: UIFont.systemFont(ofSize: size, weight: weight),
+            .foregroundColor: color,
+            .paragraphStyle: paragraphStyle
+        ]
+        
+        if tracking != 0 {
+            attributes[.kern] = tracking
+        }
+        
+        let string = NSAttributedString(string: text, attributes: attributes)
+        
+        // Vertically center text in the rect
+        let textSize = string.size()
+        let textRect = CGRect(
+            x: rect.origin.x,
+            y: rect.origin.y + (rect.height - textSize.height) / 2,
+            width: rect.width,
+            height: textSize.height
+        )
+        
+        string.draw(in: textRect)
+    }
+    
+    nonisolated private func drawCenteredRoundedText(_ text: String, in rect: CGRect, size: CGFloat, weight: UIFont.Weight = .regular, context: CGContext) {
+        let systemFont = UIFont.systemFont(ofSize: size, weight: weight)
+        let roundedFont: UIFont
+        if let descriptor = systemFont.fontDescriptor.withDesign(.rounded) {
+            roundedFont = UIFont(descriptor: descriptor, size: size)
+        } else {
+            roundedFont = systemFont
+        }
+        
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.alignment = .center
+        
         let attributes: [NSAttributedString.Key: Any] = [
-            .font: UIFont.systemFont(ofSize: size, weight: .black),
+            .font: roundedFont,
+            .foregroundColor: UIColor.white,
+            .paragraphStyle: paragraphStyle
+        ]
+        
+        let string = NSAttributedString(string: text, attributes: attributes)
+        
+        // Vertically center text in the rect
+        let textSize = string.size()
+        let textRect = CGRect(
+            x: rect.origin.x,
+            y: rect.origin.y + (rect.height - textSize.height) / 2,
+            width: rect.width,
+            height: textSize.height
+        )
+        
+        string.draw(in: textRect)
+    }
+    
+    nonisolated private func drawText(_ text: String, at point: CGPoint, size: CGFloat, weight: UIFont.Weight = .regular, tracking: CGFloat = 0, color: UIColor = .white, context: CGContext) {
+        var attributes: [NSAttributedString.Key: Any] = [
+            .font: UIFont.systemFont(ofSize: size, weight: weight),
+            .foregroundColor: color
+        ]
+        
+        if tracking != 0 {
+            attributes[.kern] = tracking
+        }
+        
+        let string = NSAttributedString(string: text, attributes: attributes)
+        string.draw(at: point)
+    }
+    
+    nonisolated private func drawMonospacedText(_ text: String, at point: CGPoint, size: CGFloat, weight: UIFont.Weight = .regular, color: UIColor = .white, context: CGContext) {
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: UIFont.monospacedSystemFont(ofSize: size, weight: weight),
             .foregroundColor: color
         ]
         let string = NSAttributedString(string: text, attributes: attributes)

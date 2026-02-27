@@ -19,6 +19,8 @@ struct ContentView: View {
                 RecordingView()
             case .summary:
                 SummaryView()
+            case .history:
+                HistoryView()
             }
         }
         .animation(.default, value: appState.currentScreen)

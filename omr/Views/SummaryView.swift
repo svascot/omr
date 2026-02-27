@@ -35,13 +35,13 @@ struct SummaryView: View {
                         // Main Stats Grid
                         VStack(spacing: 20) {
                             HStack(spacing: 16) {
-                                SummaryStatCard(title: "Reps", value: "\(appState.lastSession.reps)", icon: "figure.strengthtraining.traditional", color: .blue)
-                                SummaryStatCard(title: "Active", value: formatTime(appState.lastSession.duration), icon: "timer", color: .green)
+                                SummaryStatCard(title: "Reps", value: "\(appState.lastSession?.reps ?? 0)", icon: "figure.strengthtraining.traditional", color: .blue)
+                                SummaryStatCard(title: "Active", value: formatTime(appState.lastSession?.duration ?? 0), icon: "timer", color: .green)
                             }
                             
                             HStack(spacing: 16) {
-                                SummaryStatCard(title: "Total Time", value: formatTime(appState.lastSession.totalDuration), icon: "clock.fill", color: .cyan)
-                                SummaryStatCard(title: "Streak", value: "\(appState.lastSession.streak)", icon: "flame.fill", color: .orange)
+                                SummaryStatCard(title: "Total Time", value: formatTime(appState.lastSession?.totalDuration ?? 0), icon: "clock.fill", color: .cyan)
+                                SummaryStatCard(title: "Streak", value: "\(appState.lastSession?.streak ?? 0)", icon: "flame.fill", color: .orange)
                             }
                         }
                         .offset(y: isVisible ? 0 : 20)
@@ -53,6 +53,40 @@ struct SummaryView: View {
                 
                 // Footer Buttons (Matches HomeView style)
                 VStack(spacing: 16) {
+                    // Save Video Button (one-time use)
+                    if appState.lastVideoURL != nil {
+                        Button(action: {
+                            if !appState.videoSaved {
+                                appState.saveVideoToLibrary()
+                            }
+                        }) {
+                            HStack(spacing: 10) {
+                                Image(systemName: appState.videoSaved ? "checkmark.circle.fill" : "square.and.arrow.down.fill")
+                                    .font(.body)
+                                Text(appState.videoSaved ? "VIDEO SAVED ✓" : "SAVE VIDEO")
+                                    .font(.headline)
+                                    .fontWeight(.bold)
+                                    .tracking(1)
+                            }
+                            .foregroundStyle(.white.opacity(appState.videoSaved ? 0.6 : 1))
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 64)
+                            .background(
+                                LinearGradient(
+                                    colors: appState.videoSaved
+                                        ? [Color.gray.opacity(0.4), Color.gray.opacity(0.3)]
+                                        : [Color.green, Color.green.opacity(0.8)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                            .shadow(color: appState.videoSaved ? .clear : .green.opacity(0.4), radius: 15, x: 0, y: 8)
+                        }
+                        .disabled(appState.videoSaved)
+                        .animation(.spring(response: 0.3), value: appState.videoSaved)
+                    }
+                    
                     Button(action: {
                         appState.saveAndReturnHome()
                     }) {
@@ -91,7 +125,6 @@ struct SummaryView: View {
             }
         }
         .onAppear {
-            // Note: saveVideoToLibrary is now handled automatically in RecordingView for gestures
             withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.1)) {
                 isVisible = true
             }

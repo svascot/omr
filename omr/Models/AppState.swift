@@ -6,9 +6,13 @@ enum AppScreen {
     case home
     case recording
     case summary
+    case history
 }
 
-struct SessionStats: Codable {
+struct SessionStats: Codable, Identifiable {
+    var id: UUID = UUID()
+    var date: Date = Date()
+    var user: String = "vasco"
     var reps: Int
     var duration: TimeInterval // Active recording time
     var totalDuration: TimeInterval // Total time from landing on screen
@@ -17,10 +21,16 @@ struct SessionStats: Codable {
 
 class AppState: ObservableObject {
     @Published var currentScreen: AppScreen = .home
-    @Published var lastSession: SessionStats = SessionStats(reps: 0, duration: 0, totalDuration: 0, streak: 0)
+    @Published var sessionHistory: [SessionStats] = []
+    @Published var currentUser: String = "vasco"
     @Published var lastVideoURL: URL?
+    @Published var videoSaved: Bool = false
     
-    private let storageURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("user_data.json")
+    var lastSession: SessionStats? {
+        sessionHistory.last
+    }
+    
+    private let storageURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("user_data_v2.json")
     
     init() {
         loadData()
@@ -29,17 +39,33 @@ class AppState: ObservableObject {
     // Action to start training
     func startTraining() {
         lastVideoURL = nil // Clear stale URL from previous session
+        videoSaved = false
         currentScreen = .recording
     }
     
     // Action to end training
     func endTraining(reps: Int, duration: TimeInterval, totalDuration: TimeInterval, videoURL: URL?) {
         // Relaxed streak logic: count if reps > 0 OR session was long enough (e.g. > 5s)
-        let newStreak = (reps > 0 || duration > 5) ? lastSession.streak + 1 : lastSession.streak
-        lastSession = SessionStats(reps: reps, duration: duration, totalDuration: totalDuration, streak: newStreak)
+        let previousStreak = sessionHistory.last?.streak ?? 0
+        let newStreak = (reps > 0 || duration > 5) ? previousStreak + 1 : previousStreak
+        
+        let newSession = SessionStats(
+            user: currentUser,
+            reps: reps,
+            duration: duration,
+            totalDuration: totalDuration,
+            streak: newStreak
+        )
+        
+        sessionHistory.append(newSession)
         lastVideoURL = videoURL
         currentScreen = .summary
         saveData()
+    }
+    
+    // Action to navigate to history
+    func showHistory() {
+        currentScreen = .history
     }
     
     // Action to save video to library
@@ -61,12 +87,16 @@ class AppState: ObservableObject {
                 PHPhotoLibrary.shared().performChanges({
                     PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: url)
                 }) { success, error in
-                    if success {
-                        print("DEBUG: Video saved to camera roll successfully!")
-                    } else {
-                        print("DEBUG: Error saving video to camera roll: \(error?.localizedDescription ?? "unknown error")")
+                    DispatchQueue.main.async {
+                        if success {
+                            self.videoSaved = true
+                            print("DEBUG: Video saved to camera roll successfully!")
+                        } else {
+                            print("DEBUG: Error saving video to camera roll: \(error?.localizedDescription ?? "unknown error")")
+                        }
                     }
                 }
+
             case .denied, .restricted:
                 print("DEBUG: Photo Library access denied or restricted.")
             case .notDetermined:
@@ -90,7 +120,7 @@ class AppState: ObservableObject {
     
     private func saveData() {
         do {
-            let data = try JSONEncoder().encode(lastSession)
+            let data = try JSONEncoder().encode(sessionHistory)
             try data.write(to: storageURL)
         } catch {
             print("Failed to save data: \(error)")
@@ -101,7 +131,7 @@ class AppState: ObservableObject {
         guard FileManager.default.fileExists(atPath: storageURL.path) else { return }
         do {
             let data = try Data(contentsOf: storageURL)
-            lastSession = try JSONDecoder().decode(SessionStats.self, from: data)
+            sessionHistory = try JSONDecoder().decode([SessionStats].self, from: data)
         } catch {
             print("Failed to load data: \(error)")
         }

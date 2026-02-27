@@ -51,8 +51,8 @@ struct RecordingView: View {
                     
                     // Timers Stack
                     VStack(alignment: .trailing, spacing: 12) {
-                        TimerCard(label: "SERIES", time: formatTime(timeElapsed), isActive: cameraManager.status == .recording)
-                        TimerCard(label: "TOTAL", time: formatTime(totalTimeElapsed), isActive: true, isSecondary: true)
+                        TimerCard(label: "Series time", time: formatTime(timeElapsed), isActive: cameraManager.status == .recording)
+                        TimerCard(label: "Total time", time: formatTime(totalTimeElapsed), isActive: true, isSecondary: true)
                     }
                 }
                 .padding(.horizontal, 24)
@@ -93,9 +93,6 @@ struct RecordingView: View {
                                                    duration: timeElapsed, 
                                                    totalDuration: totalTimeElapsed, 
                                                    videoURL: url)
-                                if url != nil {
-                                    appState.saveVideoToLibrary()
-                                }
                             }
                         }
                     )
@@ -181,9 +178,6 @@ struct RecordingView: View {
                                    duration: timeElapsed, 
                                    totalDuration: totalTimeElapsed, 
                                    videoURL: url)
-                if url != nil {
-                    appState.saveVideoToLibrary()
-                }
             }
         }
     }
