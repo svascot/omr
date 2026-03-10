@@ -11,6 +11,11 @@ import SwiftUI
 struct omrApp: App {
     @StateObject private var appState = AppState()
     
+    init() {
+        // Prevent the phone screen from sleeping while the app is active
+        UIApplication.shared.isIdleTimerDisabled = true
+    }
+    
     var body: some Scene {
         WindowGroup {
             ContentView()
