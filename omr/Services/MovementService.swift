@@ -4,16 +4,18 @@ import Combine
 
 enum TrackingMode: Sendable {
     case uninitialized
-    case absolutePoint // Tracking raw Y coordinate of head
-    case relativeDistance // Tracking distance between hands and head (Pull-ups)
+    case pushUp // Tracking absolute Y coordinate (working well as-is)
+    case pullUp // Tracking elbow angle
+    case squat  // Tracking knee angle
 }
 
 extension TrackingMode: Equatable {
     nonisolated static func == (lhs: TrackingMode, rhs: TrackingMode) -> Bool {
         switch (lhs, rhs) {
         case (.uninitialized, .uninitialized): return true
-        case (.absolutePoint, .absolutePoint): return true
-        case (.relativeDistance, .relativeDistance): return true
+        case (.pushUp, .pushUp): return true
+        case (.pullUp, .pullUp): return true
+        case (.squat, .squat): return true
         default: return false
         }
     }
@@ -37,8 +39,8 @@ class MovementService: NSObject, ObservableObject, @unchecked Sendable {
     private nonisolated(unsafe) var valleyValue: CGFloat = 2
     
     // Thresholds
-    private let absoluteMotionThreshold: CGFloat = 0.05 // 5% of screen height for absolute push-up/squat tracking
-    private let relativeMotionThreshold: CGFloat = 0.15 // 15% distance change for pull-ups (arms are long)
+    private let pushUpThreshold: CGFloat = 0.05 // 5% of screen height
+    private let angleThreshold: CGFloat = 30.0  // Degrees of joint bend required to trigger state changes
     
     private nonisolated(unsafe) var activeMode: TrackingMode = .uninitialized
     private nonisolated(unsafe) var currentState: MovementState = .up
@@ -47,89 +49,127 @@ class MovementService: NSObject, ObservableObject, @unchecked Sendable {
         super.init()
     }
     
+    /// Calculates the angle in degrees between three points (e.g., Shoulder -> Elbow -> Wrist)
+    nonisolated private func calculateAngle(first: CGPoint, mid: CGPoint, last: CGPoint) -> CGFloat {
+        let radians = atan2(last.y - mid.y, last.x - mid.x) - atan2(first.y - mid.y, first.x - mid.x)
+        var degrees = abs(radians * 180.0 / .pi)
+        if degrees > 180.0 {
+            degrees = 360.0 - degrees
+        }
+        return degrees
+    }
+    
     nonisolated func processFrame(_ sampleBuffer: CMSampleBuffer) {
         let handler = VNImageRequestHandler(cmSampleBuffer: sampleBuffer, orientation: .up, options: [:])
         do {
             try handler.perform([bodyPoseRequest])
             guard let observation = bodyPoseRequest.results?.first else { return }
             
-            // 1. Core Points
-            var headPoint: VNRecognizedPoint?
-            if let nose = try? observation.recognizedPoint(.nose), nose.confidence > 0.5 {
-                headPoint = nose
-            } else if let neck = try? observation.recognizedPoint(.neck), neck.confidence > 0.5 {
-                headPoint = neck
-            }
-            guard let head = headPoint else { return }
+            // 1. Extract Core Joints
+            let nose = try? observation.recognizedPoint(.nose)
+            let neck = try? observation.recognizedPoint(.neck)
+            let head = (nose?.confidence ?? 0 > 0.5) ? nose : ((neck?.confidence ?? 0 > 0.5) ? neck : nil)
+            guard let headPoint = head else { return }
             
-            // 2. Try to find wrists for Pull-up mode
-            var wristYAvg: CGFloat? = nil
-            let leftWrist = try? observation.recognizedPoint(.leftWrist)
-            let rightWrist = try? observation.recognizedPoint(.rightWrist)
-            
-            var validWrists = [CGFloat]()
-            if let lw = leftWrist, lw.confidence > 0.3 { validWrists.append(lw.location.y) }
-            if let rw = rightWrist, rw.confidence > 0.3 { validWrists.append(rw.location.y) }
-            
-            if !validWrists.isEmpty {
-                wristYAvg = validWrists.reduce(0, +) / CGFloat(validWrists.count)
+            // Extract Joints for Angles (Confidence > 0.3)
+            func getPoint(_ key: VNHumanBodyPoseObservation.JointName) -> CGPoint? {
+                if let point = try? observation.recognizedPoint(key), point.confidence > 0.3 {
+                    return point.location
+                }
+                return nil
             }
             
-            // 3. Determine the Current Value being tracked
+            let lShoulder = getPoint(.leftShoulder)
+            let rShoulder = getPoint(.rightShoulder)
+            let lElbow = getPoint(.leftElbow)
+            let rElbow = getPoint(.rightElbow)
+            let lWrist = getPoint(.leftWrist)
+            let rWrist = getPoint(.rightWrist)
+            
+            let lHip = getPoint(.leftHip)
+            let rHip = getPoint(.rightHip)
+            let lKnee = getPoint(.leftKnee)
+            let rKnee = getPoint(.rightKnee)
+            let lAnkle = getPoint(.leftAnkle)
+            let rAnkle = getPoint(.rightAnkle)
+            
+            // 2. Determine Tracking Mode & Current Value
             let currentValue: CGFloat
             let currentMode: TrackingMode
             
-            if let wrists = wristYAvg {
-                // RELATIVE MODE (Pull-ups)
-                // Distance between head and wrists.
-                // At dead hang, distance is MAX. At top of pull-up, distance is MIN.
-                currentValue = abs(wrists - head.location.y)
-                currentMode = .relativeDistance
+            // Heuristic 1: Pull-Ups (Wrists are above shoulders. In Vision, Y goes from 0 at bottom to 1 at top, so higher Y means higher physically on screen)
+            let wristsY = [lWrist?.y, rWrist?.y].compactMap { $0 }
+            let shouldersY = [lShoulder?.y, rShoulder?.y].compactMap { $0 }
+            
+            let avgWristY = wristsY.isEmpty ? nil : wristsY.reduce(0, +) / CGFloat(wristsY.count)
+            let avgShoulderY = shouldersY.isEmpty ? nil : shouldersY.reduce(0, +) / CGFloat(shouldersY.count)
+            
+            // Heuristic 2: Squats (Standing mostly vertical, head is significantly higher than hips)
+            let hipsY = [lHip?.y, rHip?.y].compactMap { $0 }
+            let avgHipY = hipsY.isEmpty ? nil : hipsY.reduce(0, +) / CGFloat(hipsY.count)
+            
+            // Logic to select mode
+            if let wY = avgWristY, let sY = avgShoulderY, wY > sY,
+               let shoulder = lShoulder ?? rShoulder,
+               let elbow = lElbow ?? rElbow,
+               let wrist = lWrist ?? rWrist {
+                // Determine it's a pull-up because arms are reached up
+                currentMode = .pullUp
+                // Calculate elbow angle
+                currentValue = calculateAngle(first: shoulder, mid: elbow, last: wrist)
+                
+            } else if let hY = avgHipY, headPoint.location.y > hY + 0.2, // Head is comfortably above hips
+                      let hip = lHip ?? rHip,
+                      let knee = lKnee ?? rKnee,
+                      let ankle = lAnkle ?? rAnkle {
+                // Determine it's a squat/vertical movement
+                currentMode = .squat
+                // Calculate knee angle
+                currentValue = calculateAngle(first: hip, mid: knee, last: ankle)
+                
             } else {
-                // ABSOLUTE MODE (Push-ups, Squats)
-                // Raw Y position of the head.
-                currentValue = head.location.y
-                currentMode = .absolutePoint
+                // Fallback to push-up / horizontal movement
+                currentMode = .pushUp
+                currentValue = headPoint.location.y
             }
             
-            // 4. Initialization or Mode Switch
+            // 3. Initialization or Mode Switch
             if peakValue < 0 || activeMode != currentMode {
                 peakValue = currentValue
                 valleyValue = currentValue
                 activeMode = currentMode
-                // If we enter relative mode (arms visible), we start in "down" (dead hang) expecting a pull-up
-                currentState = currentMode == .relativeDistance ? .down : .up
+                // If angles, 180 is typically extended (straight leg/arm = up). 
+                // Pushup Y, top of screen is 1.0. So higher is 'up'.
+                currentState = .up
                 print("DEBUG: Movement mode switched to \(currentMode)")
                 return
             }
             
-            let threshold = activeMode == .relativeDistance ? relativeMotionThreshold : absoluteMotionThreshold
+            // 4. Set Thresholds based on mode
+            let threshold = (activeMode == .pushUp) ? pushUpThreshold : angleThreshold
             
             // 5. State machine for robust rep counting
             switch currentState {
             case .up:
-                // Track the highest value reached during the Up phase
-                // For relative (pull-up): high value = large distance = dead hang (which is actually down, see below)
+                // Track highest angle (e.g. 180deg standing) or highest Y position (pushup top)
                 peakValue = max(peakValue, currentValue)
                 
-                // If value drops significantly below the peak, transition to Down
-                // (For absolute: head dropped. For relative: distance decreased, so pulling up to the bar)
+                // If angle/Y drops significantly below peak, transition to Down
+                // (Squat/Pullup: angle closes; Pushup: head drops)
                 if currentValue < peakValue - threshold {
                     currentState = .down
-                    valleyValue = currentValue // Start tracking valley from here
+                    valleyValue = currentValue
                     print("DEBUG: Movement state -> DOWN (Peak: \(String(format: "%.2f", peakValue)), Current: \(String(format: "%.2f", currentValue)))")
                 }
                 
             case .down:
-                // Track the lowest value reached during the Down phase
-                // For relative (pull-up): low value = small distance = chin over bar
+                // Track lowest angle (e.g. 90deg squat bottom) or lowest Y position
                 valleyValue = min(valleyValue, currentValue)
                 
-                // If we rise significantly above the valley, transition to Up and count a rep
-                // (For absolute: head rose. For relative: distance increased, dropping back to dead hang)
+                // If value rises significantly above valley, transition to Up and count a rep
                 if currentValue > valleyValue + threshold {
                     currentState = .up
-                    peakValue = currentValue // Start tracking peak from here
+                    peakValue = currentValue
                     
                     internalRepCount += 1
                     let newCount = internalRepCount
