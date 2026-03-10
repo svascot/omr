@@ -2,10 +2,21 @@ import Vision
 import Foundation
 import Combine
 
-enum TrackingMode: Equatable, Sendable {
+enum TrackingMode: Sendable {
     case uninitialized
     case absolutePoint // Tracking raw Y coordinate of head
     case relativeDistance // Tracking distance between hands and head (Pull-ups)
+}
+
+extension TrackingMode: Equatable {
+    nonisolated static func == (lhs: TrackingMode, rhs: TrackingMode) -> Bool {
+        switch (lhs, rhs) {
+        case (.uninitialized, .uninitialized): return true
+        case (.absolutePoint, .absolutePoint): return true
+        case (.relativeDistance, .relativeDistance): return true
+        default: return false
+        }
+    }
 }
 
 enum MovementState: Sendable {
