@@ -7,6 +7,7 @@ struct RecordingView: View {
     @StateObject private var airPodsService = AirPodsService()
     @State private var timeElapsed: TimeInterval = 0
     @State private var totalTimeElapsed: TimeInterval = 0
+    @State private var restingTimeElapsed: TimeInterval = 0
     @State private var sets: Int = 0
     @State private var isVisible = false
     
@@ -99,6 +100,22 @@ struct RecordingView: View {
                 .opacity(isVisible ? 1 : 0)
             }
             
+            // Central Resting Timer
+            if cameraManager.status == .paused {
+                VStack(spacing: 8) {
+                    Text("RESTING")
+                        .font(.headline)
+                        .foregroundStyle(.white.opacity(0.8))
+                        .tracking(2)
+                    
+                    Text(formatTime(restingTimeElapsed))
+                        .font(.system(size: 72, weight: .black, design: .monospaced))
+                        .foregroundStyle(.red)
+                        .shadow(color: .red.opacity(0.5), radius: 20)
+                }
+                .transition(.scale.combined(with: .opacity))
+            }
+            
             // Camera Status Error Overlay
             if case .error(let message) = cameraManager.status {
                 VStack(spacing: 12) {
@@ -121,6 +138,8 @@ struct RecordingView: View {
             totalTimeElapsed += 1
             if cameraManager.status == .recording {
                 timeElapsed += 1
+            } else if cameraManager.status == .paused {
+                restingTimeElapsed += 1
             }
             cameraManager.updateOverlayTimers(series: timeElapsed, total: totalTimeElapsed)
         }
@@ -193,6 +212,7 @@ struct RecordingView: View {
             cameraManager.pauseRecording()
         } else if cameraManager.status == .paused {
             sets += 1
+            restingTimeElapsed = 0 // Reset resting timer when starting next set
             cameraManager.resumeRecording()
         } else {
             sets += 1
