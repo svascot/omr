@@ -133,6 +133,10 @@ class AppState: ObservableObject {
     
     // Action to discard and return home
     func discardAndReturnHome() {
+        if !sessionHistory.isEmpty {
+            sessionHistory.removeLast()
+            saveData()
+        }
         currentScreen = .home
     }
     

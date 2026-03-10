@@ -42,7 +42,6 @@ class CameraManager: NSObject, ObservableObject {
     private let videoQueue = DispatchQueue(label: "com.omr.videoQueue")
     
     // Vision Properties
-    nonisolated(unsafe) private let handPoseRequest = VNDetectHumanHandPoseRequest()
     nonisolated(unsafe) private var lastGestureTime: Date = .distantPast
     private let gestureDebounceInterval: TimeInterval = 1.5
     
@@ -347,6 +346,9 @@ extension CameraManager: AVCaptureVideoDataOutputSampleBufferDelegate {
     }
     
     nonisolated private func detectGestures(in sampleBuffer: CMSampleBuffer) {
+        let handPoseRequest = VNDetectHumanHandPoseRequest()
+        handPoseRequest.maximumHandCount = 1
+        
         let handler = VNImageRequestHandler(cmSampleBuffer: sampleBuffer, orientation: .up, options: [:])
         do {
             try handler.perform([handPoseRequest])
@@ -363,7 +365,7 @@ extension CameraManager: AVCaptureVideoDataOutputSampleBufferDelegate {
                       let wrist = wristPoints[.wrist] else { continue }
                 
                 // Extract tip points
-                guard let thumbTip = thumbPoints[.thumbTip],
+                guard let _ = thumbPoints[.thumbTip],
                       let indexTip = indexPoints[.indexTip],
                       let middleTip = middlePoints[.middleTip],
                       let ringTip = ringPoints[.ringTip],

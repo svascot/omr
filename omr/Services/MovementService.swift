@@ -2,6 +2,17 @@ import Vision
 import Foundation
 import Combine
 
+enum TrackingMode: Equatable, Sendable {
+    case uninitialized
+    case absolutePoint // Tracking raw Y coordinate of head
+    case relativeDistance // Tracking distance between hands and head (Pull-ups)
+}
+
+enum MovementState: Sendable {
+    case up
+    case down
+}
+
 @MainActor
 class MovementService: NSObject, ObservableObject, @unchecked Sendable {
     @Published var repCount: Int = 0
@@ -18,17 +29,7 @@ class MovementService: NSObject, ObservableObject, @unchecked Sendable {
     private let absoluteMotionThreshold: CGFloat = 0.05 // 5% of screen height for absolute push-up/squat tracking
     private let relativeMotionThreshold: CGFloat = 0.15 // 15% distance change for pull-ups (arms are long)
     
-    enum TrackingMode: Equatable, Sendable {
-        case uninitialized
-        case absolutePoint // Tracking raw Y coordinate of head
-        case relativeDistance // Tracking distance between hands and head (Pull-ups)
-    }
     private nonisolated(unsafe) var activeMode: TrackingMode = .uninitialized
-    
-    enum MovementState: Sendable {
-        case up
-        case down
-    }
     private nonisolated(unsafe) var currentState: MovementState = .up
     
     nonisolated override init() {
