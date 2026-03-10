@@ -4,6 +4,7 @@ import Combine
 struct RecordingView: View {
     @EnvironmentObject var appState: AppState
     @StateObject private var cameraManager = CameraManager()
+    @StateObject private var airPodsService = AirPodsService()
     @State private var timeElapsed: TimeInterval = 0
     @State private var totalTimeElapsed: TimeInterval = 0
     @State private var sets: Int = 0
@@ -72,15 +73,7 @@ struct RecordingView: View {
                         color: recordingButtonColor,
                         action: {
                             withAnimation(.spring()) {
-                                if cameraManager.status == .recording {
-                                    cameraManager.pauseRecording()
-                                } else if cameraManager.status == .paused {
-                                    sets += 1
-                                    cameraManager.resumeRecording()
-                                } else {
-                                    sets += 1
-                                    cameraManager.startRecording()
-                                }
+                                toggleRecording()
                             }
                         }
                     )
@@ -136,10 +129,17 @@ struct RecordingView: View {
             handleGesture(gesture)
             cameraManager.detectedGesture = nil
         }
+        .onChange(of: airPodsService.tapDetected) { _, _ in
+            handleAirPodTap()
+        }
         .onAppear {
+            airPodsService.start()
             withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
                 isVisible = true
             }
+        }
+        .onDisappear {
+            airPodsService.stop()
         }
         .statusBarHidden()
     }
@@ -169,15 +169,7 @@ struct RecordingView: View {
     private func handleGesture(_ gesture: CameraManager.GestureAction) {
         switch gesture {
         case .peace:
-            if cameraManager.status == .recording {
-                cameraManager.pauseRecording()
-            } else if cameraManager.status == .paused {
-                sets += 1
-                cameraManager.resumeRecording()
-            } else {
-                sets += 1
-                cameraManager.startRecording()
-            }
+            toggleRecording()
         case .wave:
             cameraManager.stopRecording { url in
                 appState.endTraining(reps: cameraManager.movementService.repCount, 
@@ -186,6 +178,25 @@ struct RecordingView: View {
                                    totalDuration: totalTimeElapsed, 
                                    videoURL: url)
             }
+        }
+    }
+    
+    private func handleAirPodTap() {
+        withAnimation(.spring()) {
+            toggleRecording()
+        }
+    }
+    
+    /// Shared toggle logic used by on-screen button, hand gestures, and AirPod taps.
+    private func toggleRecording() {
+        if cameraManager.status == .recording {
+            cameraManager.pauseRecording()
+        } else if cameraManager.status == .paused {
+            sets += 1
+            cameraManager.resumeRecording()
+        } else {
+            sets += 1
+            cameraManager.startRecording()
         }
     }
 }

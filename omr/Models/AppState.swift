@@ -18,6 +18,7 @@ struct SessionStats: Codable, Identifiable {
     var totalDuration: TimeInterval // Total time from landing on screen
     var sets: Int
     var streak: Int
+    var sessionName: String?
 }
 
 class AppState: ObservableObject {
@@ -26,6 +27,7 @@ class AppState: ObservableObject {
     @Published var currentUser: String = "vasco"
     @Published var lastVideoURL: URL?
     @Published var videoSaved: Bool = false
+    @Published var pendingSessionName: String = ""
     
     var lastSession: SessionStats? {
         sessionHistory.last
@@ -41,14 +43,24 @@ class AppState: ObservableObject {
     func startTraining() {
         lastVideoURL = nil // Clear stale URL from previous session
         videoSaved = false
+        pendingSessionName = "" // Clear previous session name
         currentScreen = .recording
     }
     
     // Action to end training
     func endTraining(reps: Int, sets: Int, duration: TimeInterval, totalDuration: TimeInterval, videoURL: URL?) {
-        // Relaxed streak logic: count if reps > 0 OR session was long enough (e.g. > 5s)
         let previousStreak = sessionHistory.last?.streak ?? 0
-        let newStreak = (reps > 0 || duration > 5) ? previousStreak + 1 : previousStreak
+        var newStreak = previousStreak
+        
+        // Strict once-a-day streak logic
+        // Only increment the streak if we haven't already trained today
+        let hasTrainedToday = sessionHistory.contains { Calendar.current.isDateInToday($0.date) }
+        
+        let isValidSession = reps > 0 || duration > 5
+        
+        if isValidSession && !hasTrainedToday {
+            newStreak = previousStreak + 1
+        }
         
         let newSession = SessionStats(
             user: currentUser,
@@ -111,6 +123,10 @@ class AppState: ObservableObject {
     
     // Action to save and return home
     func saveAndReturnHome() {
+        if !sessionHistory.isEmpty && !pendingSessionName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            let lastIndex = sessionHistory.count - 1
+            sessionHistory[lastIndex].sessionName = pendingSessionName.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
         currentScreen = .home
         saveData()
     }
@@ -118,6 +134,17 @@ class AppState: ObservableObject {
     // Action to discard and return home
     func discardAndReturnHome() {
         currentScreen = .home
+    }
+    
+    // Data Management
+    func deleteSession(id: UUID) {
+        sessionHistory.removeAll { $0.id == id }
+        saveData()
+    }
+    
+    func clearAllData() {
+        sessionHistory.removeAll()
+        saveData()
     }
     
     private func saveData() {

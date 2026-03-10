@@ -32,6 +32,17 @@ struct SummaryView: View {
                         .offset(y: isVisible ? 0 : 20)
                         .opacity(isVisible ? 1 : 0)
                         
+                        // Custom Session Name Input
+                        TextField("Name this session (optional)", text: $appState.pendingSessionName)
+                            .font(.headline)
+                            .foregroundStyle(.white)
+                            .padding()
+                            .background(Color.white.opacity(0.1))
+                            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                            .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.white.opacity(0.2), lineWidth: 1))
+                            .offset(y: isVisible ? 0 : 20)
+                            .opacity(isVisible ? 1 : 0)
+                        
                         // Main Stats Grid
                         VStack(spacing: 20) {
                             HStack(spacing: 16) {

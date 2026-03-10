@@ -3,6 +3,7 @@ import SwiftUI
 struct HistoryView: View {
     @EnvironmentObject var appState: AppState
     @State private var isVisible = false
+    @State private var showingClearAlert = false
     
     var sortedHistory: [SessionStats] {
         appState.sessionHistory.sorted(by: { $0.date > $1.date })
@@ -49,13 +50,35 @@ struct HistoryView: View {
                     
                     Spacer()
                     
+                    if !sortedHistory.isEmpty {
+                        Button(action: {
+                            showingClearAlert = true
+                        }) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "trash.fill")
+                                    .font(.system(size: 10))
+                                Text("CLEAR")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .tracking(0.5)
+                            }
+                            .foregroundStyle(.red.opacity(0.8))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(Rectangle().fill(.ultraThinMaterial))
+                            .clipShape(Capsule())
+                            .overlay(Capsule().stroke(.red.opacity(0.3), lineWidth: 1))
+                        }
+                    }
+                    
+                    Spacer()
+                    
                     VStack(alignment: .trailing, spacing: 2) {
                         Text("HISTORY")
                             .font(.system(size: 14, weight: .black))
                             .tracking(2)
                             .foregroundStyle(.white)
                         
-                        Text("TOTAL SESSIONS: \(appState.sessionHistory.count)")
+                        Text("\(appState.sessionHistory.count) SESSIONS")
                             .font(.system(size: 9, weight: .bold))
                             .foregroundStyle(.white.opacity(0.5))
                             .tracking(0.5)
@@ -80,7 +103,11 @@ struct HistoryView: View {
                     ScrollView(showsIndicators: false) {
                         VStack(spacing: 16) {
                             ForEach(sortedHistory) { session in
-                                HistoryCard(session: session)
+                                HistoryCard(session: session) {
+                                    withAnimation(.spring()) {
+                                        appState.deleteSession(id: session.id)
+                                    }
+                                }
                             }
                         }
                         .padding(.horizontal, 24)
@@ -105,11 +132,22 @@ struct HistoryView: View {
                 isVisible = true
             }
         }
+        .alert("Clear History", isPresented: $showingClearAlert) {
+            Button("Cancel", role: .cancel) { }
+            Button("Clear All", role: .destructive) {
+                withAnimation(.spring()) {
+                    appState.clearAllData()
+                }
+            }
+        } message: {
+            Text("Are you sure you want to delete all recorded sessions? This cannot be undone.")
+        }
     }
 }
 
 struct HistoryCard: View {
     let session: SessionStats
+    let onDelete: () -> Void
     
     var body: some View {
         VStack(spacing: 16) {
@@ -120,7 +158,7 @@ struct HistoryCard: View {
                         .foregroundStyle(.blue)
                         .tracking(1)
                     
-                    Text("Training Session")
+                    Text((session.sessionName?.isEmpty == false) ? session.sessionName! : "Training Session")
                         .font(.headline)
                         .foregroundStyle(.white)
                 }
@@ -138,6 +176,15 @@ struct HistoryCard: View {
                 .padding(.vertical, 4)
                 .background(Color.white.opacity(0.1))
                 .clipShape(Capsule())
+                
+                Button(action: onDelete) {
+                    Image(systemName: "trash.fill")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.red.opacity(0.8))
+                        .padding(8)
+                        .background(Color.red.opacity(0.15))
+                        .clipShape(Circle())
+                }
             }
             
             VStack(spacing: 12) {
