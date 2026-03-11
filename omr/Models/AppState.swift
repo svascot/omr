@@ -140,14 +140,14 @@ class AppState: ObservableObject {
         currentScreen = .home
     }
     
+    // Action to navigate home without side effects
+    func goHome() {
+        currentScreen = .home
+    }
+    
     // Data Management
     func deleteSession(id: UUID) {
         sessionHistory.removeAll { $0.id == id }
-        saveData()
-    }
-    
-    func clearAllData() {
-        sessionHistory.removeAll()
         saveData()
     }
     

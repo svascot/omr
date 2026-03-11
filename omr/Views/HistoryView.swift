@@ -3,7 +3,6 @@ import SwiftUI
 struct HistoryView: View {
     @EnvironmentObject var appState: AppState
     @State private var isVisible = false
-    @State private var showingClearAlert = false
     
     var sortedHistory: [SessionStats] {
         appState.sessionHistory.sorted(by: { $0.date > $1.date })
@@ -31,44 +30,8 @@ struct HistoryView: View {
                 // Header
                 HStack {
                     Button(action: {
-                        appState.discardAndReturnHome()
+                        appState.goHome()
                     }) {
-                        HStack(spacing: 8) {
-                            Image(systemName: "chevron.left")
-                                .fontWeight(.bold)
-                            Text("BACK")
-                                .font(.system(size: 12, weight: .black))
-                                .tracking(1)
-                        }
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
-                        .background(Rectangle().fill(.ultraThinMaterial))
-                        .clipShape(Capsule())
-                        .overlay(Capsule().stroke(.white.opacity(0.1), lineWidth: 1))
-                    }
-                    
-                    Spacer()
-                    
-                    if !sortedHistory.isEmpty {
-                        Button(action: {
-                            showingClearAlert = true
-                        }) {
-                            HStack(spacing: 6) {
-                                Image(systemName: "trash.fill")
-                                    .font(.system(size: 10))
-                                Text("CLEAR")
-                                    .font(.system(size: 10, weight: .bold))
-                                    .tracking(0.5)
-                            }
-                            .foregroundStyle(.red.opacity(0.8))
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .background(Rectangle().fill(.ultraThinMaterial))
-                            .clipShape(Capsule())
-                            .overlay(Capsule().stroke(.red.opacity(0.3), lineWidth: 1))
-                        }
-                    }
                     
                     Spacer()
                     
@@ -118,30 +81,13 @@ struct HistoryView: View {
         }
         .gesture(
             DragGesture()
-                .onEnded { value in
-                    // Only trigger if starting from the left edge (first 50px) and swiping right
-                    if value.startLocation.x < 50 && value.translation.width > 80 && abs(value.translation.height) < 50 {
-                        withAnimation(.spring()) {
-                            appState.discardAndReturnHome()
-                        }
-                    }
-                }
-        )
         .onAppear {
             withAnimation(.spring()) {
                 isVisible = true
             }
         }
-        .alert("Clear History", isPresented: $showingClearAlert) {
-            Button("Cancel", role: .cancel) { }
-            Button("Clear All", role: .destructive) {
-                withAnimation(.spring()) {
-                    appState.clearAllData()
-                }
-            }
-        } message: {
-            Text("Are you sure you want to delete all recorded sessions? This cannot be undone.")
-        }
+    }
+}
     }
 }
 
