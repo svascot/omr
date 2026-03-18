@@ -16,6 +16,7 @@ To empower athletes and fitness enthusiasts to dominate progressive volume chall
 - **⏱️ Rest Timer**: A large, high-visibility resting timer automatically appears in the center of the screen the moment you pause, keeping your training intensity on track.
 - **💎 Premium Glassmorphic UI**: A stunning, state-of-the-art interface built with premium materials, micro-animations, and custom typography optimized for focused workouts.
 - **📊 Session Analytics & History**: Custom-name your training sessions, track your total reps, sets, and active time, and manage your daily streaks.
+- **🏋️ Manual Training Mode**: A camera-free tracking mode with a live timer, a scrollable wheel picker for rep selection, and a set log. Perfect for quick sessions where you just want to log your reps without video recording.
 - **🌙 Never-Sleep Mode**: OMR automatically prevents your iPhone screen from auto-locking or dimming during your training session.
 
 ## 🛠️ Tech Stack & Rationale

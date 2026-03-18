@@ -5,6 +5,7 @@ import Photos
 enum AppScreen {
     case home
     case recording
+    case manualTraining
     case summary
     case history
 }
@@ -45,6 +46,14 @@ class AppState: ObservableObject {
         videoSaved = false
         pendingSessionName = "" // Clear previous session name
         currentScreen = .recording
+    }
+    
+    // Action to start manual training (no camera)
+    func startManualTraining() {
+        lastVideoURL = nil
+        videoSaved = false
+        pendingSessionName = ""
+        currentScreen = .manualTraining
     }
     
     // Action to end training

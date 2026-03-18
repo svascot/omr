@@ -17,6 +17,8 @@ struct ContentView: View {
                 HomeView()
             case .recording:
                 RecordingView()
+            case .manualTraining:
+                ManualTrainingView()
             case .summary:
                 SummaryView()
             case .history:

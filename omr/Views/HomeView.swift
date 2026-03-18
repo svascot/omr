@@ -117,16 +117,16 @@ struct HomeView: View {
                 }
                 
                 // Bottom Button Action
-                VStack {
+                VStack(spacing: 12) {
                     Button(action: {
                         withAnimation {
                             appState.startTraining()
                         }
                     }) {
                         HStack(spacing: 12) {
-                            Image(systemName: "play.fill")
+                            Image(systemName: "camera.fill")
                                 .font(.title3)
-                            Text("START TRAINING")
+                            Text("RECORD TRAINING")
                                 .font(.headline)
                                 .fontWeight(.bold)
                                 .tracking(1)
@@ -140,9 +140,33 @@ struct HomeView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
                         .shadow(color: .blue.opacity(0.4), radius: 15, x: 0, y: 8)
                     }
-                    .padding(.horizontal, 24)
-                    .padding(.bottom, 20)
+                    
+                    Button(action: {
+                        withAnimation {
+                            appState.startManualTraining()
+                        }
+                    }) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "figure.strengthtraining.traditional")
+                                .font(.title3)
+                            Text("MANUAL TRAINING")
+                                .font(.headline)
+                                .fontWeight(.bold)
+                                .tracking(1)
+                        }
+                        .foregroundStyle(.blue)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 64)
+                        .background(.ultraThinMaterial)
+                        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                .stroke(.blue.opacity(0.4), lineWidth: 1.5)
+                        )
+                    }
                 }
+                .padding(.horizontal, 24)
+                .padding(.bottom, 20)
                 .background(
                     Color(uiColor: .systemBackground)
                         .opacity(0.8)
